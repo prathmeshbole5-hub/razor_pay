@@ -1,0 +1,126 @@
+/* ==========================================================================
+   RECOVERAI DESIGN SYSTEM TOKENS
+   Unified CSS Variables for Merchant (SaaS) & Internal (Command Center) Portals
+   ========================================================================== */
+
+:root {
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, monospace;
+
+  /* Spacing Scale */
+  --space-1: 0.25rem;  /* 4px */
+  --space-2: 0.5rem;   /* 8px */
+  --space-3: 0.75rem;  /* 12px */
+  --space-4: 1rem;     /* 16px */
+  --space-5: 1.25rem;  /* 20px */
+  --space-6: 1.5rem;   /* 24px */
+  --space-8: 2rem;     /* 32px */
+  --space-10: 2.5rem;  /* 40px */
+  --space-12: 3rem;    /* 48px */
+  --space-16: 4rem;    /* 64px */
+
+  /* Border Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions & Animation Curves */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ==========================================
+   MERCHANT PORTAL THEME (Modern Fintech SaaS)
+   ========================================== */
+.theme-merchant {
+  /* Core Backgrounds */
+  --bg-app: #0b0f19;
+  --bg-surface: #111827;
+  --bg-surface-elevated: #1f293d;
+  --bg-surface-hover: #26334d;
+  --bg-glass: rgba(17, 24, 39, 0.75);
+  
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-active: #6366f1;
+
+  /* Text Colors */
+  --text-primary: #f9fafb;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-inverse: #0b0f19;
+
+  /* Accent & Brand Colors */
+  --brand-primary: #6366f1;
+  --brand-primary-hover: #4f46e5;
+  --brand-primary-light: rgba(99, 102, 241, 0.15);
+  --brand-accent: #8b5cf6;
+
+  /* Status Colors */
+  --status-success: #10b981;
+  --status-success-bg: rgba(16, 185, 129, 0.12);
+  --status-warning: #f59e0b;
+  --status-warning-bg: rgba(245, 158, 11, 0.12);
+  --status-danger: #f43f5e;
+  --status-danger-bg: rgba(244, 63, 94, 0.12);
+  --status-info: #06b6d4;
+  --status-info-bg: rgba(6, 182, 212, 0.12);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.25);
+}
+
+/* ==========================================
+   RAZORPAY INTERNAL THEME (Command Center Telemetry)
+   ========================================== */
+.theme-internal {
+  /* Core Backgrounds */
+  --bg-app: #07090e;
+  --bg-surface: #0e131f;
+  --bg-surface-elevated: #151c2e;
+  --bg-surface-hover: #1e2840;
+  --bg-glass: rgba(14, 19, 31, 0.85);
+
+  /* Telemetry Borders */
+  --border-subtle: rgba(0, 240, 255, 0.08);
+  --border-default: rgba(0, 240, 255, 0.18);
+  --border-active: #00f0ff;
+
+  /* Text Colors */
+  --text-primary: #ecfeff;
+  --text-secondary: #8b9bb4;
+  --text-muted: #4e5d78;
+  --text-inverse: #07090e;
+
+  /* Accent & Telemetry Colors */
+  --brand-primary: #00f0ff;
+  --brand-primary-hover: #00c8d6;
+  --brand-primary-light: rgba(0, 240, 255, 0.12);
+  --brand-accent: #3b82f6;
+
+  /* Real-time Status Colors */
+  --status-success: #10b981;
+  --status-success-bg: rgba(16, 185, 129, 0.15);
+  --status-warning: #fbbf24;
+  --status-warning-bg: rgba(251, 191, 36, 0.15);
+  --status-danger: #ff2a5f;
+  --status-danger-bg: rgba(255, 42, 95, 0.18);
+  --status-info: #38bdf8;
+  --status-info-bg: rgba(56, 189, 248, 0.15);
+
+  /* Command Center Telemetry Shadows & Glows */
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.6);
+  --shadow-md: 0 4px 12px 0 rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 12px 24px -4px rgba(0, 0, 0, 0.85);
+  --shadow-glow: 0 0 25px rgba(0, 240, 255, 0.35);
+  --shadow-danger-glow: 0 0 25px rgba(255, 42, 95, 0.35);
+}

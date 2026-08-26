@@ -1,0 +1,139 @@
+{
+  "model_type": "RandomForestClassifier",
+  "training_timestamp": "2026-08-23T19:31:05.523187",
+  "model_feature_columns": [
+    "amount_inr",
+    "transaction_hour",
+    "day_of_week",
+    "is_weekend",
+    "merchant_historical_tx_count",
+    "merchant_historical_failure_rate",
+    "merchant_historical_recovery_rate",
+    "gateway_historical_latency_ms",
+    "gateway_historical_success_rate",
+    "gateway_historical_error_rate",
+    "gateway_historical_incident_count",
+    "payment_method",
+    "gateway",
+    "failure_category",
+    "error_code",
+    "retryable",
+    "merchant_segment",
+    "strategy"
+  ],
+  "target_column": "recovered",
+  "excluded_features": [
+    "predicted_recovery_probability",
+    "attempt_status",
+    "status",
+    "recovered_amount_inr",
+    "risk_amount_inr",
+    "resolved_at",
+    "merchant_historical_recovered_count"
+  ],
+  "train_test_split_strategy": "Chronological 80/20 train/test split",
+  "training_record_count": 4000,
+  "test_record_count": 1000,
+  "target_distribution": {
+    "train": {
+      "0": 2627,
+      "1": 1373
+    },
+    "test": {
+      "0": 622,
+      "1": 378
+    }
+  },
+  "model_comparison": {
+    "LogisticRegression": {
+      "roc_auc": 0.6401,
+      "accuracy": 0.614,
+      "precision": 0.4923,
+      "recall": 0.6746,
+      "f1_score": 0.5692,
+      "brier_score": 0.2319,
+      "confusion_matrix": [
+        [
+          359,
+          263
+        ],
+        [
+          123,
+          255
+        ]
+      ]
+    },
+    "RandomForestClassifier": {
+      "roc_auc": 0.6443,
+      "accuracy": 0.623,
+      "precision": 0.501,
+      "recall": 0.6481,
+      "f1_score": 0.5652,
+      "brier_score": 0.2325,
+      "confusion_matrix": [
+        [
+          378,
+          244
+        ],
+        [
+          133,
+          245
+        ]
+      ]
+    },
+    "HistGradientBoostingClassifier": {
+      "roc_auc": 0.6312,
+      "accuracy": 0.621,
+      "precision": 0.4987,
+      "recall": 0.4947,
+      "f1_score": 0.4967,
+      "brier_score": 0.2327,
+      "confusion_matrix": [
+        [
+          434,
+          188
+        ],
+        [
+          191,
+          187
+        ]
+      ]
+    }
+  },
+  "evaluation_metrics": {
+    "roc_auc": 0.6443,
+    "accuracy": 0.623,
+    "precision": 0.501,
+    "recall": 0.6481,
+    "f1_score": 0.5652,
+    "brier_score": 0.2325,
+    "confusion_matrix": [
+      [
+        378,
+        244
+      ],
+      [
+        133,
+        245
+      ]
+    ]
+  },
+  "probability_bands": {
+    "low": {
+      "min": 0.0,
+      "max": 0.39,
+      "label": "Low Recovery Probability"
+    },
+    "medium": {
+      "min": 0.4,
+      "max": 0.69,
+      "label": "Medium Recovery Probability"
+    },
+    "high": {
+      "min": 0.7,
+      "max": 1.0,
+      "label": "High Recovery Probability"
+    }
+  },
+  "model_version": "1.0.0"
+}
