@@ -38,7 +38,7 @@ export default function AIInsightCard({ insight, onReviewCases }) {
           <div>
             <div className="text-xs text-slate-400 font-medium">Potential Recoverable Revenue</div>
             <div className="text-2xl sm:text-3xl font-extrabold text-emerald-400 tracking-tight">
-              ₹{insight.potentialRecovery.toLocaleString('en-IN')}
+              ₹{(insight?.potentialRecovery ?? 0).toLocaleString('en-IN')}
             </div>
             <div className="text-[11px] text-slate-500">{insight.affectedPaymentsCount} affected transactions queued</div>
           </div>

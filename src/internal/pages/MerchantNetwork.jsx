@@ -136,8 +136,8 @@ export default function MerchantNetwork() {
                   <td className="py-4 px-4 font-mono font-bold text-indigo-400">{m.merchant_id}</td>
                   <td className="py-4 px-4 font-bold text-white">{m.merchant_name}</td>
                   <td className="py-4 px-4 font-mono text-slate-300">{m.merchant_segment}</td>
-                  <td className="py-4 px-4 font-mono">{m.transaction_count.toLocaleString('en-IN')}</td>
-                  <td className="py-4 px-4 font-mono text-rose-400 font-bold">{m.failure_count}</td>
+                  <td className="py-4 px-4 font-mono">{(m.transaction_count ?? 0).toLocaleString('en-IN')}</td>
+                  <td className="py-4 px-4 font-mono text-rose-400 font-bold">{(m.failure_count ?? 0).toLocaleString('en-IN')}</td>
                   <td className="py-4 px-4 font-bold text-rose-400">{m.failure_rate}%</td>
                   <td className="py-4 px-4 text-right font-extrabold text-emerald-400">
                     {m.recovery_rate}%

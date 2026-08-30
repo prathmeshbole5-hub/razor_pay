@@ -118,7 +118,7 @@ export default function InternalAnalytics() {
               {strategies.map((st) => (
                 <tr key={st.strategy} className="hover:bg-slate-800/40">
                   <td className="py-3.5 px-4 font-semibold text-white">{st.strategy}</td>
-                  <td className="py-3.5 px-4 font-mono">{st.total_attempts.toLocaleString('en-IN')}</td>
+                  <td className="py-3.5 px-4 font-mono">{(st.total_attempts ?? 0).toLocaleString('en-IN')}</td>
                   <td className="py-3.5 px-4 font-mono font-bold text-emerald-400">{st.successful_attempts}</td>
                   <td className="py-3.5 px-4 font-bold text-slate-200">
                     ₹{((st.recovered_amount_inr || 0) / 100000).toFixed(2)}L

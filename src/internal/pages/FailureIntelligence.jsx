@@ -113,17 +113,17 @@ export default function FailureIntelligence() {
                     {row.failure_category}
                   </td>
                   <td className="py-4 px-4 font-mono font-bold text-slate-200">
-                    {row.failure_count.toLocaleString('en-IN')} failures
+                    {(row.failure_count ?? 0).toLocaleString('en-IN')} failures
                   </td>
                   <td className="py-4 px-4 font-bold text-cyan-400">
-                    {row.affected_merchant_count} Merchants
+                    {row.affected_merchant_count ?? 0} Merchants
                   </td>
                   <td className="py-4 px-4 font-extrabold text-rose-400">
-                    ₹{row.total_amount_at_risk.toLocaleString('en-IN')}
+                    ₹{(row.total_amount_at_risk ?? 0).toLocaleString('en-IN')}
                   </td>
                   <td className="py-4 px-4 text-right">
                     <div className="flex flex-wrap items-center justify-end gap-1">
-                      {row.affected_gateways.map((gw) => (
+                      {(row.affected_gateways || []).map((gw) => (
                         <span key={gw} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[10px] font-semibold text-slate-300">
                           {gw}
                         </span>

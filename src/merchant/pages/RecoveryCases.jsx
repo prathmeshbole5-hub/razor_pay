@@ -170,7 +170,7 @@ export default function RecoveryCases() {
                       </Badge>
                     </div>
                     <div className="text-sm font-bold text-white mt-0.5">
-                      {rc.customer} • <span className="text-emerald-400">₹{rc.amount.toLocaleString('en-IN')}</span>
+                      {rc.customer} • <span className="text-emerald-400">₹{(rc.amount ?? 0).toLocaleString('en-IN')}</span>
                     </div>
                   </div>
                 </div>

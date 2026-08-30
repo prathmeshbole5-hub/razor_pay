@@ -174,7 +174,7 @@ export default function PaymentDetailDrawer({ payment, isOpen, onClose, onAction
             </Badge>
           </div>
           <div className="text-3xl font-extrabold text-white">
-            ₹{amountVal.toLocaleString('en-IN')}
+            ₹{(amountVal ?? 0).toLocaleString('en-IN')}
           </div>
           <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-800/80">
             <div>

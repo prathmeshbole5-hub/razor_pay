@@ -167,7 +167,7 @@ export default function InternalOverview({ onNavigate }) {
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
               <span className="text-slate-400 block text-[10px] uppercase">Total Analyzed Cases</span>
               <div className="text-2xl font-extrabold text-white">
-                {aiOverview.total_payments_analyzed.toLocaleString('en-IN')}
+                {(aiOverview?.total_payments_analyzed ?? 0).toLocaleString('en-IN')}
               </div>
               <span className="text-slate-500 text-[10px] block">100% Payment Recovery Grain</span>
             </div>
@@ -177,13 +177,13 @@ export default function InternalOverview({ onNavigate }) {
               <div className="text-2xl font-extrabold text-rose-400">
                 ₹{totalRiskLakhs}L
               </div>
-              <span className="text-slate-500 text-[10px] block">{aiOverview.unrecovered_risk_cases_count} High-Risk Payments</span>
+              <span className="text-slate-500 text-[10px] block">{aiOverview?.unrecovered_risk_cases_count ?? 0} High-Risk Payments</span>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
               <span className="text-slate-400 block text-[10px] uppercase">AI Recovery Rate Baseline</span>
               <div className="text-2xl font-extrabold text-emerald-400">
-                {aiOverview.ecosystem_recovery_rate_pct}%
+                {aiOverview?.ecosystem_recovery_rate_pct ?? 0}%
               </div>
               <span className="text-slate-500 text-[10px] block">Verified Model Predictions</span>
             </div>

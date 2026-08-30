@@ -56,6 +56,64 @@ export default function GuidedDemoBanner({ currentPortal, onPortalChange, active
     }
   };
 
+  const navigateToStep = (index) => {
+    const step = DEMO_STEPS[index];
+    if (step) {
+      if (step.portal && onPortalChange) {
+        onPortalChange(step.portal);
+      }
+      if (step.tab && onTabChange) {
+        onTabChange(step.tab);
+      }
+    }
+  };
+
+  const startDemo = () => {
+    setDemoActive(true);
+    setCurrentStepIdx(0);
+    navigateToStep(0);
+  };
+
+  const stopDemo = () => {
+    setDemoActive(false);
+    setIsAutoPlay(false);
+  };
+
+  const handleNext = () => {
+    if (currentStepIdx < DEMO_STEPS.length - 1) {
+      const nextIdx = currentStepIdx + 1;
+      setCurrentStepIdx(nextIdx);
+      navigateToStep(nextIdx);
+    }
+  };
+
+  const handlePrev = () => {
+    if (currentStepIdx > 0) {
+      const prevIdx = currentStepIdx - 1;
+      setCurrentStepIdx(prevIdx);
+      navigateToStep(prevIdx);
+    }
+  };
+
+  useEffect(() => {
+    let timer;
+    if (demoActive && isAutoPlay) {
+      timer = setInterval(() => {
+        setCurrentStepIdx((prev) => {
+          if (prev < DEMO_STEPS.length - 1) {
+            const nextIdx = prev + 1;
+            navigateToStep(nextIdx);
+            return nextIdx;
+          } else {
+            setIsAutoPlay(false);
+            return prev;
+          }
+        });
+      }, 6000);
+    }
+    return () => clearInterval(timer);
+  }, [demoActive, isAutoPlay]);
+
   const handleResetSim = async () => {
     try {
       await resetDemoSimulation();

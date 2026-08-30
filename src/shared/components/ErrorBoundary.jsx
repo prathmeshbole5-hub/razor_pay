@@ -44,6 +44,11 @@ export class ErrorBoundary extends React.Component {
               <p className="text-xs text-slate-400 leading-relaxed">
                 An unexpected component rendering error occurred. The application state has been safely isolated.
               </p>
+              {this.state.error && (
+                <div className="text-left bg-slate-950 p-3 rounded-xl border border-rose-500/20 text-xs font-mono text-rose-300 overflow-auto max-h-32">
+                  {this.state.error.toString()}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-2">

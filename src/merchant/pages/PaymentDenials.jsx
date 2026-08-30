@@ -228,7 +228,7 @@ export default function PaymentDenials() {
                         <div className="text-[10px] text-slate-400">{payment.email}</div>
                       </td>
                       <td className="py-4 px-4 font-extrabold text-white text-sm">
-                        ₹{payment.amount.toLocaleString('en-IN')}
+                        ₹{(payment.amount ?? 0).toLocaleString('en-IN')}
                       </td>
                       <td className="py-4 px-4">
                         <div className="font-medium text-slate-200">{payment.method}</div>
