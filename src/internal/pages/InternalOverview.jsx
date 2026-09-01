@@ -90,8 +90,9 @@ export default function InternalOverview({ onNavigate }) {
   }
 
   const formattedGateways = gateways.map((gw) => {
-    const isDegraded = gw.current_status === 'DEGRADED';
-    const statusLabel = isDegraded ? 'DEGRADED' : gw.current_status === 'OPERATIONAL' ? 'HEALTHY' : 'OUTAGE';
+    const statusLabel = gw.current_status === 'DEGRADED' ? 'DEGRADED' 
+                      : gw.current_status === 'OUTAGE' ? 'OUTAGE' 
+                      : 'HEALTHY';
     
     return {
       id: `gw_${gw.gateway.toLowerCase().replace(/\s+/g, '_')}`,
@@ -100,10 +101,10 @@ export default function InternalOverview({ onNavigate }) {
       status: statusLabel,
       successRate: gw.average_success_rate,
       latencyMs: Math.round(gw.average_latency_ms),
-      failureSpikePct: gw.average_error_rate,
-      affectedMerchants: gw.incident_count > 0 ? 5 : 0,
-      hourlyVolume: 285000,
-      errorDominant: isDegraded ? 'GATEWAY_TIMEOUT (504)' : 'NONE',
+      failureSpikePct: gw.failure_rate !== undefined ? gw.failure_rate : gw.average_error_rate,
+      affectedMerchants: gw.impacted_merchants !== undefined ? gw.impacted_merchants : (gw.incident_count > 0 ? 1 : 0),
+      hourlyVolume: gw.total_transactions > 0 ? gw.total_transactions * 100 : 285000,
+      errorDominant: gw.error_dominant || 'NONE',
       lastUpdated: 'Live Feed'
     };
   });

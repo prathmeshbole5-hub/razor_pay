@@ -20,6 +20,13 @@ def get_merchant_dashboard(merchant_id: str = Query(..., description="Unique mer
         raise HTTPException(status_code=404, detail=f"Merchant '{merchant_id}' not found.")
     return data
 
+@router.get("/metrics")
+def get_merchant_metrics(merchant_id: str = Query("m_1004", description="Unique merchant ID")):
+    data = merchant_service.get_dashboard(merchant_id)
+    if data is None:
+        raise HTTPException(status_code=404, detail=f"Merchant '{merchant_id}' not found.")
+    return data
+
 @router.get("/payments/failed")
 def get_failed_payments(merchant_id: str = Query(..., description="Unique merchant ID (e.g. m_1000)")):
     data = merchant_service.get_failed_payments(merchant_id)

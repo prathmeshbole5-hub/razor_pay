@@ -23,8 +23,9 @@ export default function GatewayHealth() {
     try {
       const data = await getGatewayHealth();
       const mapped = (data || []).map((gw) => {
-        const isDegraded = gw.current_status === 'DEGRADED';
-        const statusLabel = isDegraded ? 'DEGRADED' : gw.current_status === 'OPERATIONAL' ? 'HEALTHY' : 'OUTAGE';
+        const statusLabel = gw.current_status === 'DEGRADED' ? 'DEGRADED' 
+                          : gw.current_status === 'OUTAGE' ? 'OUTAGE' 
+                          : 'HEALTHY';
         
         return {
           id: `gw_${gw.gateway.toLowerCase().replace(/\s+/g, '_')}`,
@@ -33,10 +34,13 @@ export default function GatewayHealth() {
           status: statusLabel,
           successRate: gw.average_success_rate,
           latencyMs: Math.round(gw.average_latency_ms),
-          failureSpikePct: gw.average_error_rate,
-          affectedMerchants: gw.incident_count > 0 ? 5 : 0,
-          hourlyVolume: 285000,
-          errorDominant: isDegraded ? 'GATEWAY_TIMEOUT (504)' : 'NONE',
+          failureSpikePct: gw.failure_rate !== undefined ? gw.failure_rate : gw.average_error_rate,
+          affectedMerchants: gw.impacted_merchants !== undefined ? gw.impacted_merchants : (gw.incident_count > 0 ? 5 : 0),
+          amountAtRisk: gw.amount_at_risk || 0,
+          totalTransactions: gw.total_transactions || 0,
+          failedTransactions: gw.failed_transactions || 0,
+          recentFailureCount: gw.recent_failure_count || 0,
+          errorDominant: gw.error_dominant || (gw.current_status === 'DEGRADED' ? 'GATEWAY_TIMEOUT (504)' : 'NONE'),
           lastUpdated: 'Live Feed'
         };
       });
@@ -51,6 +55,37 @@ export default function GatewayHealth() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      getGatewayHealth()
+        .then((data) => {
+          if (data) {
+            const mapped = (data || []).map((gw) => {
+              const statusLabel = gw.current_status === 'DEGRADED' ? 'DEGRADED' 
+                                : gw.current_status === 'OUTAGE' ? 'OUTAGE' 
+                                : 'HEALTHY';
+              return {
+                id: `gw_${gw.gateway.toLowerCase().replace(/\s+/g, '_')}`,
+                name: gw.gateway,
+                type: gw.gateway.includes('UPI') ? 'UPI Infrastructure' : gw.gateway.includes('Wallet') ? 'Wallet Infrastructure' : 'Bank Gateway',
+                status: statusLabel,
+                successRate: gw.average_success_rate,
+                latencyMs: Math.round(gw.average_latency_ms),
+                failureSpikePct: gw.failure_rate !== undefined ? gw.failure_rate : gw.average_error_rate,
+                affectedMerchants: gw.impacted_merchants !== undefined ? gw.impacted_merchants : (gw.incident_count > 0 ? 5 : 0),
+                amountAtRisk: gw.amount_at_risk || 0,
+                totalTransactions: gw.total_transactions || 0,
+                failedTransactions: gw.failed_transactions || 0,
+                recentFailureCount: gw.recent_failure_count || 0,
+                errorDominant: gw.error_dominant || (gw.current_status === 'DEGRADED' ? 'GATEWAY_TIMEOUT (504)' : 'NONE'),
+                lastUpdated: 'Live Feed'
+              };
+            });
+            setGateways(mapped);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredGateways = gateways.filter(
@@ -164,7 +199,13 @@ export default function GatewayHealth() {
             ))}
           </div>
 
-          <span className="text-xs text-slate-500">Live Backend Feed</span>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh Feed</span>
+          </button>
         </div>
       </Card>
 

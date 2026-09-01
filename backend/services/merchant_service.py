@@ -14,37 +14,49 @@ class MerchantService:
         if not self._validate_merchant(merchant_id):
             return None
 
-        payments = self.ds.get_payments()
-        merchant_payments = payments[payments['merchant_id'] == merchant_id]
+        # 1. Fetch live payment records & recovery actions from SQLite DB
+        live_records = []
+        recovery_actions = []
+        try:
+            from database import SessionLocal, LivePaymentModel, RecoveryActionModel
+            db = SessionLocal()
+            try:
+                live_records = db.query(LivePaymentModel).filter_by(merchant_id=merchant_id).all()
+                recovery_actions = db.query(RecoveryActionModel).filter_by(merchant_id=merchant_id).all()
+            finally:
+                db.close()
+        except Exception as db_err:
+            print(f"[MerchantService] DB query notice: {db_err}")
+
+        # 2. Calculate metrics from SQLite single source of truth
+        total_payments = len(live_records)
+        failed_list = [p for p in live_records if str(p.status or "").lower() == "failed"]
+        success_list = [p for p in live_records if str(p.status or "").lower() in ("captured", "verified", "successful", "success")]
         
-        if merchant_payments.empty:
-            return {
-                "merchant_id": merchant_id,
-                "total_payments": 0,
-                "successful_payments": 0,
-                "failed_payments": 0,
-                "payment_volume": 0.0,
-                "revenue_at_risk": 0.0,
-                "revenue_recovered": 0.0,
-                "recovery_rate": 0.0,
-                "active_recovery_cases": 0
-            }
+        failed_payments = len(failed_list)
+        successful_payments = len(success_list)
+        payment_volume = float(sum(p.amount or 0.0 for p in live_records))
+        revenue_at_risk = float(sum(p.amount or 0.0 for p in failed_list))
+        revenue_recovered = float(sum(p.amount or 0.0 for p in success_list))
 
-        total_payments = len(merchant_payments)
-        successful_payments = int((merchant_payments['status'] == 'Success').sum())
-        failed_payments = int((merchant_payments['status'] == 'Failed').sum())
-        payment_volume = float(merchant_payments['amount_inr'].sum())
+        # Track executed recovery actions
+        action_recovered_ids = set()
+        for act in recovery_actions:
+            if act.status in ("executed", "completed") and act.action_type in ("smart_retry", "otp_reminder", "payment_link"):
+                action_recovered_ids.add(act.payment_id)
 
-        payment_ids = merchant_payments['payment_id']
-        recovery_attempts = self.ds.get_recovery_attempts()
-        m_recovery = recovery_attempts[recovery_attempts['payment_id'].isin(payment_ids)]
+        action_recovered_sum = 0.0
+        for p in failed_list:
+            if p.payment_id in action_recovered_ids or p.razorpay_payment_id in action_recovered_ids:
+                action_recovered_sum += float(p.amount or 0.0)
 
-        revenue_at_risk = float(m_recovery['risk_amount_inr'].sum())
-        revenue_recovered = float(m_recovery['recovered_amount_inr'].sum())
+        if action_recovered_sum > 0:
+            revenue_recovered += action_recovered_sum
+            revenue_at_risk = max(0.0, revenue_at_risk - action_recovered_sum)
 
         total_risk = revenue_at_risk + revenue_recovered
         recovery_rate = round((revenue_recovered / total_risk * 100), 2) if total_risk > 0 else 0.0
-        active_cases = int((m_recovery['attempt_status'] == 'Pending').sum())
+        active_cases = max(0, failed_payments - len(action_recovered_ids))
 
         return {
             "merchant_id": merchant_id,
@@ -62,27 +74,34 @@ class MerchantService:
         if not self._validate_merchant(merchant_id):
             return None
 
-        payments = self.ds.get_payments()
-        m_payments = payments[(payments['merchant_id'] == merchant_id) & (payments['status'] == 'Failed')]
-
-        if m_payments.empty:
-            return []
-
-        failures = self.ds.get_payment_failures()
-        merged = pd.merge(m_payments, failures, on='payment_id', how='inner')
+        # Fetch live failed payments from SQLite
+        live_failed = []
+        try:
+            from database import SessionLocal, LivePaymentModel
+            db = SessionLocal()
+            try:
+                live_recs = db.query(LivePaymentModel).filter_by(merchant_id=merchant_id).all()
+                live_failed = [p for p in live_recs if str(p.status or "").lower() == "failed"]
+            finally:
+                db.close()
+        except Exception as db_err:
+            print(f"[MerchantService] DB failed payments notice: {db_err}")
 
         result = []
-        for _, row in merged.iterrows():
+        for p in live_failed:
+            created_str = p.created_at.isoformat() if hasattr(p.created_at, 'isoformat') else str(p.created_at or "")
             result.append({
-                "payment_id": str(row['payment_id']),
-                "amount_inr": float(row['amount_inr']),
-                "payment_method": str(row['payment_method']),
-                "gateway": str(row['gateway']),
-                "created_at": str(row['created_at']),
-                "failure_category": str(row['failure_category']),
-                "error_code": str(row['error_code']),
-                "retryable": bool(row['retryable'])
+                "payment_id": str(p.payment_id),
+                "merchant_id": str(p.merchant_id),
+                "amount_inr": float(p.amount or 0.0),
+                "payment_method": str(p.payment_method or "Card"),
+                "gateway": str(p.bank or "Razorpay Gateway"),
+                "created_at": created_str,
+                "failure_category": str(p.error_description or p.error_code or "Payment Authorization Failed"),
+                "error_code": str(p.error_code or "BAD_REQUEST"),
+                "retryable": True
             })
+
         return result
 
     def get_recovery_cases(self, merchant_id: str) -> Optional[List[Dict[str, Any]]]:

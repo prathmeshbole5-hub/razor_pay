@@ -56,6 +56,18 @@ export default function MerchantDashboard({ onNavigate }) {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(() => {
+      Promise.all([
+        getMerchantDashboard(CURRENT_MERCHANT_ID),
+        getFailedPayments(CURRENT_MERCHANT_ID)
+      ])
+        .then(([dash, failures]) => {
+          if (dash) setDashboardData(dash);
+          if (failures) setFailedPayments(failures);
+        })
+        .catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const formattedPayments = failedPayments.map((p) => ({
@@ -114,7 +126,10 @@ export default function MerchantDashboard({ onNavigate }) {
     );
   }
 
-  const atRiskLakhs = dashboardData ? (dashboardData.revenue_at_risk / 100000).toFixed(2) : '0';
+  const atRiskVal = dashboardData?.revenue_at_risk || 0;
+  const formattedRiskText = atRiskVal >= 100000 
+    ? `₹${(atRiskVal / 100000).toFixed(2)}L` 
+    : `₹${atRiskVal.toLocaleString('en-IN')}`;
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -128,7 +143,7 @@ export default function MerchantDashboard({ onNavigate }) {
             </span>
           </div>
           <p className="text-sm text-slate-300 mt-1">
-            <strong className="text-rose-400 font-bold">₹{atRiskLakhs}L is currently at risk</strong> across {dashboardData?.failed_payments || 0} failed payments. RecoverAI has {dashboardData?.active_recovery_cases || 0} recovery workflows active.
+            <strong className="text-rose-400 font-bold">{formattedRiskText} is currently at risk</strong> across {dashboardData?.failed_payments || 0} failed payments. RecoverAI has {dashboardData?.active_recovery_cases || 0} recovery workflows active.
           </p>
         </div>
 

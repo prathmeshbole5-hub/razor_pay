@@ -83,6 +83,13 @@ export default function GatewayStatusCard({ gateway, onTriggerRouteSwitch }) {
         </div>
       </div>
 
+      {gateway.amountAtRisk > 0 && (
+        <div className="text-[10px] bg-rose-950/30 border border-rose-500/20 px-3 py-1.5 rounded-lg flex items-center justify-between text-rose-300">
+          <span>Amount at Risk:</span>
+          <span className="font-mono font-bold text-white">₹{gateway.amountAtRisk.toLocaleString('en-IN')}</span>
+        </div>
+      )}
+
       {/* Action / Warning info */}
       {gateway.status !== 'HEALTHY' && (
         <div className="flex items-center justify-between pt-1">
