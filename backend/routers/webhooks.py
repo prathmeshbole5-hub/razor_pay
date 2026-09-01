@@ -49,8 +49,13 @@ async def handle_razorpay_webhook(
     event_type = payload.get("event", "payment.failed")
     event_id = payload.get("event_id") or payload.get("id")
     
-    entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
-    provider_pm_id = entity.get("id") or payload.get("razorpay_payment_id") or "pay_webhook_event"
+    payment_payload = payload.get("payload", {}).get("payment", {})
+    entity = payment_payload.get("entity", {})
+    if not entity and "id" in payload:
+        entity = payload
+
+    provider_pm_id = entity.get("id") or payload.get("razorpay_payment_id") or payload.get("payment_id") or "pay_webhook_event"
+    order_id = entity.get("order_id") or payload.get("order_id") or payload.get("razorpay_order_id")
     
     if not event_id:
         event_id = f"{provider_pm_id}_{event_type}"
@@ -71,22 +76,35 @@ async def handle_razorpay_webhook(
     normalized = pes.normalize_razorpay_event(event_type, payload)
     processed = pes.process_live_event(normalized)
 
+    error_code = entity.get("error_code") or payload.get("error_code") or normalized.get("error_code")
+    error_desc = entity.get("error_description") or payload.get("error_description") or entity.get("error_reason") or normalized.get("error_description")
+    error_reason = entity.get("error_reason") or payload.get("error_reason")
+    if error_reason and error_desc and error_reason not in str(error_desc):
+        error_desc = f"{error_desc} ({error_reason})"
+
+    raw_amount = entity.get("amount") or payload.get("amount")
+    amount_inr = None
+    if raw_amount is not None:
+        raw_amt_val = float(raw_amount)
+        amount_inr = raw_amt_val / 100.0 if raw_amt_val >= 100 else raw_amt_val
+
     # Update LivePaymentService store
     live_rec = lps.update_live_payment(
-        razorpay_order_id=entity.get("order_id") or f"order_{provider_pm_id}",
+        razorpay_order_id=order_id or f"order_{provider_pm_id}",
         razorpay_payment_id=provider_pm_id,
         status="failed" if "failed" in event_type else "captured",
         payment_method=normalized.get("payment_method", "Card"),
-        bank=normalized.get("gateway", "Razorpay"),
-        error_code=normalized.get("error_code"),
-        error_description=normalized.get("error_description")
+        bank=entity.get("bank") or entity.get("wallet") or normalized.get("gateway", "Razorpay"),
+        error_code=error_code,
+        error_description=error_desc,
+        amount_inr=amount_inr
     )
 
     # Run intelligence if live payment adapted
     adapted_features, data_quality = LivePaymentFeatureAdapter.adapt_live_payment(live_rec)
     prediction = get_recovery_prediction_service().predict_recovery_probability(adapted_features)
-    root_cause = get_root_cause_service().analyze_root_cause("pay_104421") or {}
-    recommendation = get_recommendation_service().recommend_recovery_strategy("pay_104421")
+    root_cause = get_root_cause_service().analyze_root_cause(live_rec["payment_id"]) or {}
+    recommendation = get_recommendation_service().recommend_recovery_strategy(live_rec["payment_id"])
 
     lps.set_payment_intelligence(live_rec["payment_id"], {
         "prediction": prediction,
@@ -94,6 +112,21 @@ async def handle_razorpay_webhook(
         "recommendation": recommendation,
         "data_quality": data_quality
     })
+
+    # Generate/update infrastructure incident for Razorpay Internal Portal if payment failed
+    if "failed" in event_type:
+        try:
+            from services.infrastructure_incident_service import get_infrastructure_incident_service
+            get_infrastructure_incident_service().process_payment_failure_incident(
+                live_rec,
+                {
+                    "prediction": prediction,
+                    "root_cause": root_cause,
+                    "recommendation": recommendation
+                }
+            )
+        except Exception as inc_err:
+            print(f"[Webhook] Incident detection notice: {inc_err}")
 
     return {
         "status": "ok",

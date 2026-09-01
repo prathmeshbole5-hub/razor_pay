@@ -66,13 +66,18 @@ class RecoveryActionService:
             )
             db.add(action_rec)
 
+            formatted_action_name = action_type.replace('_', ' ').strip()
+            event_msg = f"{formatted_action_name.title()} recovery action executed successfully."
+            if formatted_action_name.lower() == "otp reminder":
+                event_msg = "OTP reminder recovery action executed successfully."
+
             # 4. Create payment event
             evt = PaymentEventModel(
                 payment_id=live_payment["payment_id"],
                 merchant_id=merchant_id,
                 event_type="RECOVERY_ACTION_EXECUTED",
-                event_description=f"Action '{action_type}' executed: {action_desc}",
-                metadata_json=json.dumps({"action": action_type, "status": "executed"}),
+                event_description=event_msg,
+                metadata_json=json.dumps({"action": action_type, "status": "executed", "detail": action_desc}),
                 created_at=now
             )
             db.add(evt)
@@ -85,7 +90,7 @@ class RecoveryActionService:
                 "merchant_id": merchant_id,
                 "action": action_type,
                 "status": "executed",
-                "message": f"{action_type.replace('_', ' ').title()} recovery action triggered",
+                "message": event_msg,
                 "action_id": str(action_rec.id),
                 "executed_at": action_rec.created_at.isoformat()
             }

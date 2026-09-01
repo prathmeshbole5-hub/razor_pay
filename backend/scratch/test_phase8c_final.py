@@ -143,10 +143,13 @@ def run_master_qa_tests():
     # 10. ML Recovery Prediction
     print("[Test 10/22] Live ML Prediction Execution...")
     test_pm_id = f"pay_rzp_qa8c_99"
-    valid_sig = "sig_valid_test_mode_12345"
+    test_order_id = "order_test_qa8c_99"
+    secret = os.getenv("RAZORPAY_KEY_SECRET", "IDqTyn2czz2UDDzUpNmwT7Sd").strip()
+    msg = f"{test_order_id}|{test_pm_id}".encode("utf-8")
+    valid_sig = hmac.new(secret.encode("utf-8"), msg, hashlib.sha256).hexdigest()
     res_ver = client.post("/api/payments/verify", json={
         "razorpay_payment_id": test_pm_id,
-        "razorpay_order_id": "order_test_qa8c_99",
+        "razorpay_order_id": test_order_id,
         "razorpay_signature": valid_sig,
         "merchant_id": "m_1004",
         "status": "captured"

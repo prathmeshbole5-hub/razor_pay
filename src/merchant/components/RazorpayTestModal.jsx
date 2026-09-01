@@ -89,17 +89,9 @@ export default function RazorpayTestModal({ isOpen, onClose, merchantId = 'm_100
         });
         rzp.open();
       } else {
-        // Server Test Verification Flow
-        const testPaymentId = `pay_test_${Math.floor(100000 + Math.random() * 900000)}`;
-        const testSignature = `sig_test_${Math.floor(100000 + Math.random() * 900000)}`;
-        
-        const ver = await verifyRazorpayPayment(
-          testPaymentId,
-          order.order_id,
-          testSignature,
-          merchantId
+        throw new Error(
+          'Razorpay Checkout script could not be loaded or Razorpay API credentials are missing. Please check your environment setup.'
         );
-        setVerification(ver);
       }
     } catch (err) {
       console.error('Razorpay test payment failed:', err);

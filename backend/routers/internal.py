@@ -31,6 +31,43 @@ def get_merchant_network():
 def get_recovery_intelligence():
     return internal_service.get_recovery_intelligence()
 
+# INFRASTRUCTURE INCIDENT ENDPOINTS (Razorpay Internal Telemetry)
+
+@router.get("/incidents")
+def get_infrastructure_incidents():
+    """
+    Retrieves all ecosystem infrastructure incidents from SQLite DB.
+    Includes real test payment failures and active telemetry spikes.
+    """
+    from services.infrastructure_incident_service import get_infrastructure_incident_service
+    return get_infrastructure_incident_service().get_all_incidents()
+
+@router.get("/incidents/{incident_id}")
+def get_infrastructure_incident_by_id(incident_id: str):
+    from services.infrastructure_incident_service import get_infrastructure_incident_service
+    incidents = get_infrastructure_incident_service().get_all_incidents()
+    for inc in incidents:
+        if inc.get("id") == incident_id or inc.get("incident_id") == incident_id:
+            return inc
+    return {"error": "Incident not found", "incident_id": incident_id}
+
+@router.get("/incidents/{incident_id}/payments")
+def get_infrastructure_incident_affected_payments(incident_id: str):
+    """
+    Retrieves all live persisted payment records contributing to an infrastructure incident.
+    """
+    from services.infrastructure_incident_service import get_infrastructure_incident_service
+    return get_infrastructure_incident_service().get_affected_payments(incident_id)
+
+@router.post("/incidents/{incident_id}/mitigate")
+def mitigate_infrastructure_incident(incident_id: str):
+    """
+    Simulates emergency mitigation for an infrastructure incident (TEST/DEMO MODE ONLY).
+    Updates incident status to MITIGATED and records audit event in SQLite DB.
+    """
+    from services.infrastructure_incident_service import get_infrastructure_incident_service
+    return get_infrastructure_incident_service().mitigate_incident(incident_id)
+
 # INTERNAL OPERATIONS INTELLIGENCE ENDPOINTS
 
 @router.get("/intelligence/overview")

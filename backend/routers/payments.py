@@ -112,11 +112,12 @@ def verify_payment(req: VerifyPaymentRequest):
     adapted_features, data_quality = LivePaymentFeatureAdapter.adapt_live_payment(live_rec)
 
     # Run Intelligence
+    payment_id_to_analyze = live_rec["payment_id"]
     prediction = get_recovery_prediction_service().predict_recovery_probability(adapted_features)
-    root_cause = get_root_cause_service().analyze_root_cause("pay_104421") or {
+    root_cause = get_root_cause_service().analyze_root_cause(payment_id_to_analyze) or {
         "primary_root_cause": {"title": "Successful Authorization", "reason": "Transaction processed cleanly"}
     }
-    recommendation = get_recommendation_service().recommend_recovery_strategy("pay_104421")
+    recommendation = get_recommendation_service().recommend_recovery_strategy(payment_id_to_analyze)
 
     intel_payload = {
         "prediction": prediction,
@@ -208,10 +209,10 @@ def get_live_payment_intelligence(
     # Otherwise compute live intelligence dynamically
     adapted_features, data_quality = LivePaymentFeatureAdapter.adapt_live_payment(record)
     prediction = get_recovery_prediction_service().predict_recovery_probability(adapted_features)
-    root_cause = get_root_cause_service().analyze_root_cause("pay_104421") or {
+    root_cause = get_root_cause_service().analyze_root_cause(record["payment_id"]) or {
         "primary_root_cause": {"title": "Live Payment Analysis", "reason": "Live transaction telemetry analyzed"}
     }
-    recommendation = get_recommendation_service().recommend_recovery_strategy("pay_104421")
+    recommendation = get_recommendation_service().recommend_recovery_strategy(record["payment_id"])
 
     intel_payload = {
         "payment": record,

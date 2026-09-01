@@ -5,7 +5,7 @@ import { Card } from '../../shared/components/Card';
 import Badge from '../../shared/components/Badge';
 import Button from '../../shared/components/Button';
 import { Modal } from '../../shared/components/Modal';
-import { getGatewayHealth } from '../../api/internalApi';
+import { getGatewayHealth, executeIncidentMitigation } from '../../api/internalApi';
 
 export default function GatewayHealth() {
   const [filterStatus, setFilterStatus] = useState('ALL');
@@ -64,10 +64,18 @@ export default function GatewayHealth() {
     setRerouted(false);
   };
 
-  const handleExecuteReroute = () => {
+  const handleExecuteReroute = async () => {
     setRerouted(true);
+    try {
+      if (selectedGateway) {
+        await executeIncidentMitigation(selectedGateway.id);
+      }
+    } catch (err) {
+      console.warn('Mitigation notice:', err);
+    }
     setTimeout(() => {
       setIsModalOpen(false);
+      loadData();
     }, 1500);
   };
 

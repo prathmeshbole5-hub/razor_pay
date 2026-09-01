@@ -94,6 +94,31 @@ class WebhookEventModel(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class InfrastructureIncidentModel(Base):
+    __tablename__ = "infrastructure_incidents"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    incident_id = Column(String(100), unique=True, index=True, nullable=False)
+    payment_id = Column(String(100), index=True, nullable=False)
+    merchant_id = Column(String(50), index=True, nullable=False)
+    gateway = Column(String(100), nullable=False)
+    payment_method = Column(String(50), nullable=False)
+    error_code = Column(String(100), nullable=True)
+    error_reason = Column(String(100), nullable=True)
+    title = Column(String(200), nullable=False)
+    severity = Column(String(20), default="WARNING")
+    confidence = Column(Float, default=0.90)
+    root_cause = Column(Text, nullable=True)
+    amount_at_risk = Column(Float, default=0.0)
+    recommended_mitigation = Column(Text, nullable=True)
+    status = Column(String(50), default="ACTIVE")
+    source = Column(String(50), default="razorpay_test_webhook")
+    affected_transactions_count = Column(Integer, default=1)
+    mitigated_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 def init_db():
     """Initializes SQLite database tables automatically."""
     Base.metadata.create_all(bind=engine)

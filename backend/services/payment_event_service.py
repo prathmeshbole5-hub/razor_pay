@@ -116,8 +116,8 @@ class PaymentEventService:
                         "failure_category": normalized_event["failure_category"]
                     }
                     prediction = rps.predict_recovery_probability(sample_dict)
-                    root_cause = rcs.analyze_root_cause("pay_104421")
-                    recommendation = rec.recommend_recovery_strategy("pay_104421")
+                    root_cause = rcs.analyze_root_cause(pm_id)
+                    recommendation = rec.recommend_recovery_strategy(pm_id)
 
                     result["intelligence_available"] = True
                     result["prediction"] = prediction

@@ -60,7 +60,13 @@ export default function PaymentDetailDrawer({ payment, isOpen, onClose, onAction
       }
 
       if (actionsData.status === 'fulfilled' && actionsData.value?.actions) {
-        setActionHistory(actionsData.value.actions);
+        const acts = actionsData.value.actions;
+        setActionHistory(acts);
+        if (acts.length > 0) {
+          setActionDone(true);
+          const actName = acts[0].action_type.replace(/_/g, ' ');
+          setActionMsg(`${actName.charAt(0).toUpperCase() + actName.slice(1)} recovery action already executed.`);
+        }
       }
     } catch (err) {
       console.error('Failed to load merchant payment intelligence:', err);
@@ -86,14 +92,14 @@ export default function PaymentDetailDrawer({ payment, isOpen, onClose, onAction
       let recStrategy = intelligence?.recommendation?.recommended_strategy?.strategy?.toLowerCase() || '';
       let actionType = 'smart_retry';
       if (recStrategy.includes('otp')) actionType = 'otp_reminder';
-      else if (recStrategy.includes('link') || recStrategy.includes('whatsapp')) actionType = 'payment_link';
-      else if (recStrategy.includes('later') || recStrategy.includes('cool')) actionType = 'retry_later';
-      else if (recStrategy.includes('manual')) actionType = 'manual_follow_up';
+      else if (recStrategy.includes('link') || recStrategy.includes('whatsapp') || recStrategy.includes('upi') || recStrategy.includes('method') || recStrategy.includes('alternate')) actionType = 'payment_link';
+      else if (recStrategy.includes('later') || recStrategy.includes('cool') || recStrategy.includes('10 minutes')) actionType = 'retry_later';
+      else if (recStrategy.includes('manual') || recStrategy.includes('email')) actionType = 'manual_follow_up';
 
       const res = await executeLivePaymentAction(paymentId, merchantId, actionType);
       setIsProcessing(false);
       setActionDone(true);
-      setActionMsg(res.message || `Recovery action '${actionType}' executed successfully.`);
+      setActionMsg(res.message || `${actionType.replace(/_/g, ' ')} recovery action executed successfully.`);
 
       // Refresh timeline & action history
       const [tData, aData] = await Promise.allSettled([
@@ -150,16 +156,22 @@ export default function PaymentDetailDrawer({ payment, isOpen, onClose, onAction
             <Button variant="outline" size="sm" onClick={onClose}>
               Close
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={RefreshCw}
-              isLoading={isProcessing}
-              disabled={actionDone}
-              onClick={handleExecuteAction}
-            >
-              {actionDone ? 'Action Executed' : 'Execute Recommended Action'}
-            </Button>
+            {['captured', 'verified', 'successful', 'success'].includes((payment.status || '').toLowerCase()) ? (
+              <Badge variant="success" size="md">
+                Payment Captured & Settled
+              </Badge>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={RefreshCw}
+                isLoading={isProcessing}
+                disabled={actionDone}
+                onClick={handleExecuteAction}
+              >
+                {actionDone ? 'Action Executed' : 'Execute Recommended Action'}
+              </Button>
+            )}
           </div>
         </div>
       }

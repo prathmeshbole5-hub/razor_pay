@@ -54,13 +54,18 @@ class RecoveryPredictionService:
         if payment_id == "pay_104421":
             raw_prob = 0.5928
         elif self.model_pipeline is not None:
+            numeric_cols = {
+                'amount_inr', 'transaction_hour', 'day_of_week', 'is_weekend',
+                'merchant_historical_tx_count', 'merchant_historical_failure_rate',
+                'merchant_historical_recovery_rate', 'gateway_historical_latency_ms',
+                'gateway_historical_success_rate', 'gateway_historical_error_rate',
+                'gateway_historical_incident_count'
+            }
             # Fill any missing required feature columns with sensible defaults
             for col in self.feature_columns:
-                if col not in df_input.columns:
-                    if col in ['amount_inr', 'gateway_historical_latency_ms', 'merchant_historical_tx_count']:
+                if col not in df_input.columns or pd.isna(df_input[col].iloc[0]):
+                    if col in numeric_cols:
                         df_input[col] = 0.0
-                    elif col in ['transaction_hour', 'day_of_week', 'is_weekend']:
-                        df_input[col] = 0
                     else:
                         df_input[col] = 'missing'
 

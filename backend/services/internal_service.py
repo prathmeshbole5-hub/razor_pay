@@ -25,9 +25,18 @@ class InternalService:
         total_risk = total_revenue_at_risk + total_revenue_recovered
         overall_recovery_rate = round((total_revenue_recovered / total_risk * 100), 2) if total_risk > 0 else 0.0
 
-        # Active incidents based on latest event per gateway
+        # Active incidents based on latest event per gateway + SQLite active incidents
         latest_events = gateway_events.sort_values('timestamp').groupby('gateway').last()
-        active_incidents = int((latest_events['is_incident'] == True).sum())
+        csv_active_incidents = int((latest_events['is_incident'] == True).sum())
+
+        try:
+            from services.infrastructure_incident_service import get_infrastructure_incident_service
+            db_incidents = get_infrastructure_incident_service().get_all_incidents()
+            db_active_count = len([inc for inc in db_incidents if inc.get("status") == "ACTIVE"])
+        except Exception:
+            db_active_count = 0
+
+        active_incidents = max(csv_active_incidents, db_active_count)
 
         return {
             "total_payment_volume": round(total_payment_volume, 2),
@@ -47,6 +56,17 @@ class InternalService:
         if gateway_events.empty:
             return []
 
+        # Get DB active incidents to correlate gateway status
+        active_gateways_with_incidents = set()
+        try:
+            from services.infrastructure_incident_service import get_infrastructure_incident_service
+            db_incidents = get_infrastructure_incident_service().get_all_incidents()
+            for inc in db_incidents:
+                if inc.get("status") == "ACTIVE" and inc.get("gateway"):
+                    active_gateways_with_incidents.add(inc.get("gateway").upper())
+        except Exception:
+            pass
+
         grouped = gateway_events.groupby('gateway')
         result = []
 
@@ -59,6 +79,12 @@ class InternalService:
             # Current status from latest event timestamp
             latest_row = group.sort_values('timestamp').iloc[-1]
             current_status = str(latest_row['status'])
+
+            # Override status if active incident logged in SQLite DB
+            gw_upper = str(gw_name).upper()
+            if any(gw_u in gw_upper for gw_u in active_gateways_with_incidents):
+                current_status = "DEGRADED"
+                incident_count = max(incident_count, 1)
 
             result.append({
                 "gateway": str(gw_name),

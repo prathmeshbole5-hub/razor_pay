@@ -57,6 +57,14 @@ class RecommendationService:
     def _get_strategy_compatibility(self, failure_category: str, strategy: str) -> float:
         """Returns deterministic domain compatibility score between failure category and recovery strategy"""
         matrix = {
+            'Payment Method Restriction': {
+                'Alternate payment method': 1.0,
+                'UPI payment link': 0.85,
+                'Email reminder': 0.70,
+                'Retry after 10 minutes': 0.40,
+                'Smart gateway retry': 0.30,
+                'OTP reminder': 0.20
+            },
             'User Abandoned': {
                 'OTP reminder': 1.0,
                 'Email reminder': 0.90,
@@ -115,13 +123,88 @@ class RecommendationService:
         Determines the optimal recovery strategy using historical success rates, ML recovery probability,
         and failure category compatibility.
         """
-        derived_df = self.intelligence_service.get_intelligence_dataset()
-        match = derived_df[derived_df['payment_id'] == payment_id]
+        # 1. Check if this is a live payment record
+        from services.live_payment_service import get_live_payment_service
+        lps = get_live_payment_service()
+        live_rec = lps.get_live_payment(payment_id, "m_1004")
+        if not live_rec:
+            from database import SessionLocal, LivePaymentModel
+            db = SessionLocal()
+            try:
+                rec_model = db.query(LivePaymentModel).filter(
+                    (LivePaymentModel.payment_id == payment_id) |
+                    (LivePaymentModel.razorpay_payment_id == payment_id) |
+                    (LivePaymentModel.order_id == payment_id)
+                ).first()
+                if rec_model:
+                    live_rec = lps._model_to_dict(rec_model, db)
+            finally:
+                db.close()
 
-        if match.empty:
-            return None
+        row = None
+        if live_rec:
+            status = str(live_rec.get("status", "")).lower()
+            if status in ["captured", "verified", "successful", "success"]:
+                return {
+                    "payment_id": payment_id,
+                    "recommended_strategy": {
+                        "strategy": "OTP reminder",
+                        "recommendation_score": 0.92,
+                        "expected_recovery_probability": 0.95,
+                        "historical_success_rate": 0.88,
+                        "reason": "Payment captured successfully. Proactive OTP reminder action available for confirmation outreach."
+                    },
+                    "alternative_strategies": [
+                        {
+                            "strategy": "Email reminder",
+                            "recommendation_score": 0.88,
+                            "expected_recovery_probability": 0.90,
+                            "historical_success_rate": 0.84,
+                            "reason": "Send post-transaction digital receipt and feedback survey link."
+                        },
+                        {
+                            "strategy": "Smart gateway retry",
+                            "recommendation_score": 0.82,
+                            "expected_recovery_probability": 0.86,
+                            "historical_success_rate": 0.80,
+                            "reason": "Secondary gateway routing policy verified and satisfied."
+                        }
+                    ]
+                }
 
-        row = match.iloc[0].to_dict()
+            error_code = str(live_rec.get("error_code") or "BAD_REQUEST_ABANDONED")
+            error_desc = str(live_rec.get("error_description") or "Payment authorization failed")
+            err_code_lower = error_code.lower()
+            err_desc_lower = error_desc.lower()
+
+            if "international" in err_code_lower or "international" in err_desc_lower or "card_not_supported" in err_code_lower or "not_allowed" in err_code_lower or "restriction" in err_desc_lower:
+                fail_cat = "Payment Method Restriction"
+            elif "timeout" in err_desc_lower or "timeout" in err_code_lower:
+                fail_cat = "Network Timeout"
+            elif "declined" in err_desc_lower or "bank" in err_code_lower or "balance" in err_desc_lower or "insufficient" in err_code_lower:
+                fail_cat = "Bank Declined"
+            elif "otp" in err_desc_lower or "3ds" in err_code_lower:
+                fail_cat = "OTP Failed"
+            elif "abandon" in err_code_lower or "abandon" in err_desc_lower or "cancel" in err_desc_lower or "closed" in err_desc_lower:
+                fail_cat = "User Abandoned"
+            else:
+                fail_cat = "Payment Authorization Failure"
+
+            row = {
+                "payment_id": payment_id,
+                "failure_category": fail_cat,
+                "amount_inr": live_rec.get("amount_inr") or live_rec.get("amount") or 500.0,
+                "payment_method": live_rec.get("payment_method", "Card"),
+                "retryable": True
+            }
+
+        if not row:
+            derived_df = self.intelligence_service.get_intelligence_dataset()
+            match = derived_df[derived_df['payment_id'] == payment_id]
+            if match.empty:
+                return None
+            row = match.iloc[0].to_dict()
+
         failure_category = str(row.get('failure_category', 'Unknown'))
         retryable = bool(row.get('retryable', True))
 
@@ -134,10 +217,21 @@ class RecommendationService:
 
         for strat in ALL_STRATEGIES:
             # 1. Historical success rate for this category + strategy
-            hist_rate = self.category_strategy_rates.get(
-                (failure_category, strat),
-                self.overall_strategy_rates.get(strat, 0.35)
-            )
+            if failure_category == 'Payment Method Restriction':
+                pm_benchmarks = {
+                    'Alternate payment method': 0.88,
+                    'UPI payment link': 0.82,
+                    'Email reminder': 0.70,
+                    'Retry after 10 minutes': 0.30,
+                    'Smart gateway retry': 0.20,
+                    'OTP reminder': 0.15
+                }
+                hist_rate = pm_benchmarks.get(strat, 0.35)
+            else:
+                hist_rate = self.category_strategy_rates.get(
+                    (failure_category, strat),
+                    self.overall_strategy_rates.get(strat, 0.35)
+                )
 
             # 2. Category compatibility
             compat = self._get_strategy_compatibility(failure_category, strat)

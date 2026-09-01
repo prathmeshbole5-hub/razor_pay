@@ -88,8 +88,8 @@ def get_merchant_payment_analysis(
         from intelligence.live_payment_feature_adapter import LivePaymentFeatureAdapter
         adapted, dq = LivePaymentFeatureAdapter.adapt_live_payment(live_rec)
         pred = prediction_service.predict_recovery_probability(adapted)
-        rc = root_cause_service.analyze_root_cause("pay_104421") or {"primary_root_cause": {"title": "Live Transaction Analysis", "reason": "Analyzed"}}
-        rec = recommendation_service.recommend_recovery_strategy("pay_104421")
+        rc = root_cause_service.analyze_root_cause(live_rec["payment_id"]) or {"primary_root_cause": {"title": "Live Transaction Analysis", "reason": "Analyzed"}}
+        rec = recommendation_service.recommend_recovery_strategy(live_rec["payment_id"])
         return {
             "payment_id": live_rec["payment_id"],
             "merchant_id": merchant_id,

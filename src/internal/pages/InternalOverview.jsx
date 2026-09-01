@@ -3,17 +3,22 @@ import { Server, Activity, AlertTriangle, Network, DollarSign, AlertCircle, Cpu,
 import RealtimeTPSMeter from '../components/RealtimeTPSMeter';
 import GatewayStatusCard from '../components/GatewayStatusCard';
 import AnomalyAlertBanner from '../components/AnomalyAlertBanner';
-import { failureAnomalies } from '../../data/internalData';
+import AffectedPaymentsDrawer from '../components/AffectedPaymentsDrawer';
+import PaymentDetailDrawer from '../../merchant/components/PaymentDetailDrawer';
+import { failureAnomalies as fallbackAnomalies } from '../../data/internalData';
 import { StatCard, Card } from '../../shared/components/Card';
 import Badge from '../../shared/components/Badge';
 import Button from '../../shared/components/Button';
-import { getInternalDashboard, getGatewayHealth } from '../../api/internalApi';
+import { getInternalDashboard, getGatewayHealth, getIncidents, executeIncidentMitigation } from '../../api/internalApi';
 import { getInternalIntelligenceOverview } from '../../api/intelligenceApi';
 
 export default function InternalOverview({ onNavigate }) {
   const [dashboardData, setDashboardData] = useState(null);
   const [gateways, setGateways] = useState([]);
   const [aiOverview, setAiOverview] = useState(null);
+  const [incidents, setIncidents] = useState([]);
+  const [activeIncidentForDrawer, setActiveIncidentForDrawer] = useState(null);
+  const [activePaymentForIntel, setActivePaymentForIntel] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -22,14 +27,18 @@ export default function InternalOverview({ onNavigate }) {
     setLoading(true);
     setError(null);
     try {
-      const [dash, gwList, aiData] = await Promise.all([
+      const [dash, gwList, aiData, incList] = await Promise.all([
         getInternalDashboard(),
         getGatewayHealth(),
-        getInternalIntelligenceOverview()
+        getInternalIntelligenceOverview(),
+        getIncidents().catch(() => [])
       ]);
       setDashboardData(dash);
       setGateways(gwList || []);
       setAiOverview(aiData);
+
+      const activeList = (incList && incList.length > 0) ? incList : fallbackAnomalies;
+      setIncidents(activeList);
     } catch (err) {
       console.error('Failed to load internal dashboard data:', err);
       setError(err.message || 'Failed to connect to backend service');
@@ -41,6 +50,15 @@ export default function InternalOverview({ onNavigate }) {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleMitigateIncident = async (incId) => {
+    try {
+      await executeIncidentMitigation(incId);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to execute mitigation:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -95,11 +113,16 @@ export default function InternalOverview({ onNavigate }) {
 
   return (
     <div className="space-y-8 animate-fadeIn font-mono">
-      {/* Top Banner Alert if Critical Outage */}
-      {failureAnomalies.length > 0 && (
+      {/* Top Banner Alert if Critical Outage / Live Incident */}
+      {incidents.length > 0 && (
         <div className="space-y-4">
-          {failureAnomalies.map((anom) => (
-            <AnomalyAlertBanner key={anom.id} anomaly={anom} />
+          {incidents.map((anom) => (
+            <AnomalyAlertBanner
+              key={anom.id || anom.incident_id}
+              anomaly={anom}
+              onMitigate={handleMitigateIncident}
+              onViewAffectedPayments={(inc) => setActiveIncidentForDrawer(inc)}
+            />
           ))}
         </div>
       )}
@@ -217,6 +240,21 @@ export default function InternalOverview({ onNavigate }) {
           ))}
         </div>
       </div>
+
+      {/* Affected Payments Right-Side Drawer */}
+      <AffectedPaymentsDrawer
+        incident={activeIncidentForDrawer}
+        isOpen={Boolean(activeIncidentForDrawer)}
+        onClose={() => setActiveIncidentForDrawer(null)}
+        onViewPaymentIntelligence={(pm) => setActivePaymentForIntel(pm)}
+      />
+
+      {/* Payment Intelligence Drawer */}
+      <PaymentDetailDrawer
+        payment={activePaymentForIntel}
+        isOpen={Boolean(activePaymentForIntel)}
+        onClose={() => setActivePaymentForIntel(null)}
+      />
     </div>
   );
 }

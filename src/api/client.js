@@ -3,7 +3,7 @@
  * Configures base URL from environment variables with development fallback.
  */
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8002';
 
 export async function apiRequest(endpoint, options = {}, timeoutMs = 10000) {
   const url = `${API_BASE_URL}${endpoint}`;

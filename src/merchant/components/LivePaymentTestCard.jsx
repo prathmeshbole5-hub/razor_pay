@@ -438,10 +438,10 @@ export default function LivePaymentTestCard({ onPaymentCreated }) {
 
       razorpay.on(
         'payment.failed',
-        function (response) {
+        async function (response) {
 
           console.error(
-            '❌ Razorpay payment failed:',
+            '❌ Razorpay payment failed metadata:',
             response
           );
 
@@ -454,24 +454,71 @@ export default function LivePaymentTestCard({ onPaymentCreated }) {
           const errorCode =
             response?.error?.code;
 
+          const metadata =
+            response?.error?.metadata || {};
+
           const message =
             errorDescription ||
             errorReason ||
             'Razorpay payment failed.';
 
           console.error(
-            'Razorpay error code:',
-            errorCode
+            'Razorpay failure code:',
+            errorCode,
+            'Reason:',
+            errorReason,
+            'Order ID:',
+            metadata.order_id,
+            'Payment ID:',
+            metadata.payment_id
           );
 
           setError(
-            `${message}${errorCode
-              ? ` (${errorCode})`
-              : ''
+            `Payment failed. RecoverAI is analyzing the transaction... ${message}${
+              errorCode ? ` (${errorCode})` : ''
             }`
           );
 
-          setLoading(false);
+          try {
+            const failurePayload = {
+              event: 'payment.failed',
+              event_id: `evt_fail_${metadata.payment_id || Date.now()}`,
+              payload: {
+                payment: {
+                  entity: {
+                    id: metadata.payment_id || `pay_fail_${Date.now()}`,
+                    order_id: metadata.order_id || orderRes.order_id,
+                    amount: Number(orderRes.amount),
+                    currency: orderRes.currency || 'INR',
+                    status: 'failed',
+                    method: 'card',
+                    bank: 'Razorpay Gateway',
+                    error_code: errorCode || 'BAD_REQUEST_PAYMENT_FAILED',
+                    error_description: errorDescription || errorReason || 'Payment authorization failed',
+                    error_reason: errorReason || 'payment_failed',
+                    notes: {
+                      merchant_id: 'm_1004',
+                      source: 'RecoverAI'
+                    }
+                  }
+                }
+              }
+            };
+
+            const { API_BASE_URL } = await import('../../api/client');
+            await fetch(`${API_BASE_URL}/api/webhooks/razorpay`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(failurePayload)
+            });
+          } catch (webErr) {
+            console.warn('[LivePaymentTestCard] Webhook notification fallback notice:', webErr);
+          } finally {
+            if (onPaymentCreated) {
+              onPaymentCreated();
+            }
+            setLoading(false);
+          }
         }
       );
 

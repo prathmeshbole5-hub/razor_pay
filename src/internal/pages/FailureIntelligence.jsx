@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, Flame, AlertCircle, ShieldAlert } from 'lucide-react';
-import { failureAnomalies } from '../../data/internalData';
+import { failureAnomalies as fallbackAnomalies } from '../../data/internalData';
 import AnomalyAlertBanner from '../components/AnomalyAlertBanner';
+import AffectedPaymentsDrawer from '../components/AffectedPaymentsDrawer';
+import PaymentDetailDrawer from '../../merchant/components/PaymentDetailDrawer';
 import { Card } from '../../shared/components/Card';
 import Badge from '../../shared/components/Badge';
 import Button from '../../shared/components/Button';
-import { getFailureIntelligence } from '../../api/internalApi';
+import { getFailureIntelligence, getIncidents, executeIncidentMitigation } from '../../api/internalApi';
 
 export default function FailureIntelligence() {
   const [failures, setFailures] = useState([]);
+  const [incidents, setIncidents] = useState([]);
+  const [activeIncidentForDrawer, setActiveIncidentForDrawer] = useState(null);
+  const [activePaymentForIntel, setActivePaymentForIntel] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -16,8 +21,13 @@ export default function FailureIntelligence() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getFailureIntelligence();
+      const [data, incList] = await Promise.all([
+        getFailureIntelligence(),
+        getIncidents().catch(() => [])
+      ]);
       setFailures(data || []);
+      const activeList = (incList && incList.length > 0) ? incList : fallbackAnomalies;
+      setIncidents(activeList);
     } catch (err) {
       console.error('Failed to fetch failure intelligence:', err);
       setError(err.message || 'Failed to load failure intelligence');
@@ -29,6 +39,15 @@ export default function FailureIntelligence() {
   useEffect(() => {
     loadData();
   }, []);
+
+  const handleMitigateIncident = async (incId) => {
+    try {
+      await executeIncidentMitigation(incId);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to execute mitigation:', err);
+    }
+  };
 
   if (loading) {
     return (
@@ -82,8 +101,13 @@ export default function FailureIntelligence() {
       {/* Active Anomaly Alerts Stream */}
       <div className="space-y-4">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Detected System Anomalies</h3>
-        {failureAnomalies.map((anom) => (
-          <AnomalyAlertBanner key={anom.id} anomaly={anom} />
+        {incidents.map((anom) => (
+          <AnomalyAlertBanner
+            key={anom.id || anom.incident_id}
+            anomaly={anom}
+            onMitigate={handleMitigateIncident}
+            onViewAffectedPayments={(inc) => setActiveIncidentForDrawer(inc)}
+          />
         ))}
       </div>
 
@@ -136,6 +160,21 @@ export default function FailureIntelligence() {
           </table>
         </div>
       </Card>
+
+      {/* Affected Payments Right-Side Drawer */}
+      <AffectedPaymentsDrawer
+        incident={activeIncidentForDrawer}
+        isOpen={Boolean(activeIncidentForDrawer)}
+        onClose={() => setActiveIncidentForDrawer(null)}
+        onViewPaymentIntelligence={(pm) => setActivePaymentForIntel(pm)}
+      />
+
+      {/* Payment Intelligence Drawer */}
+      <PaymentDetailDrawer
+        payment={activePaymentForIntel}
+        isOpen={Boolean(activePaymentForIntel)}
+        onClose={() => setActivePaymentForIntel(null)}
+      />
     </div>
   );
 }

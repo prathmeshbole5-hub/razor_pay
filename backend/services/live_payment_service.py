@@ -59,6 +59,7 @@ class LivePaymentService:
             "merchant_id": model.merchant_id,
             "razorpay_order_id": model.order_id,
             "razorpay_payment_id": model.razorpay_payment_id,
+            "amount": round(float(model.amount), 2),
             "amount_inr": round(float(model.amount), 2),
             "currency": model.currency or "INR",
             "status": model.status,
@@ -141,7 +142,8 @@ class LivePaymentService:
         payment_method: str = "Card",
         bank: Optional[str] = None,
         error_code: Optional[str] = None,
-        error_description: Optional[str] = None
+        error_description: Optional[str] = None,
+        amount_inr: Optional[float] = None
     ) -> Optional[Dict[str, Any]]:
         """
         Updates live payment status and fields after signature verification or webhook receipt in SQLite database.
@@ -166,7 +168,7 @@ class LivePaymentService:
                         payment_id=recoverai_payment_id,
                         order_id=razorpay_order_id,
                         merchant_id=merchant_id,
-                        amount=500.0,
+                        amount=float(amount_inr) if amount_inr else 500.0,
                         currency="INR",
                         status=status,
                         payment_method=payment_method or "Card",
@@ -188,6 +190,8 @@ class LivePaymentService:
                 else:
                     record.razorpay_payment_id = razorpay_payment_id
                     record.status = status
+                    if amount_inr and amount_inr > 0:
+                        record.amount = float(amount_inr)
                     if payment_method:
                         record.payment_method = payment_method
                     if bank:
@@ -213,7 +217,7 @@ class LivePaymentService:
                         payment_id=recoverai_payment_id,
                         merchant_id=merchant_id,
                         event_type="PAYMENT_FAILED",
-                        description=f"Payment failed: {error_description or error_code or 'Authentication issue'}"
+                        description=f"Payment failed via {payment_method or 'Card'}. Reason: {error_description or error_code or 'Authorization failure'}"
                     )
                 else:
                     self._log_event(

@@ -39,3 +39,26 @@ export async function getMerchantNetwork() {
 export async function getRecoveryIntelligence() {
   return apiRequest('/api/internal/recovery-intelligence');
 }
+
+/**
+ * Fetch all active and past infrastructure incidents from backend
+ */
+export async function getIncidents() {
+  return apiRequest('/api/internal/incidents');
+}
+
+/**
+ * Fetch all persisted live payments affected by a specific infrastructure incident
+ */
+export async function getIncidentAffectedPayments(incidentId) {
+  return apiRequest(`/api/internal/incidents/${incidentId}/payments`);
+}
+
+/**
+ * Execute simulated emergency mitigation on an infrastructure incident
+ */
+export async function executeIncidentMitigation(incidentId) {
+  return apiRequest(`/api/internal/incidents/${incidentId}/mitigate`, {
+    method: 'POST',
+  });
+}
