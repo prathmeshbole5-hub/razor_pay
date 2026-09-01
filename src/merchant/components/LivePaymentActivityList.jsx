@@ -71,7 +71,9 @@ export default function LivePaymentActivityList({ refreshTrigger }) {
 
               <div className="flex items-center gap-3">
                 <div className="text-right">
-                  <div className="text-xs font-bold text-emerald-400">₹{pm.amount_inr?.toLocaleString()}</div>
+                  <div className="text-xs font-bold text-emerald-400">
+                    ₹{(pm.amount_inr || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                   <div className="text-[10px] uppercase font-semibold text-slate-400">{pm.status}</div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-500" />
@@ -101,7 +103,9 @@ export default function LivePaymentActivityList({ refreshTrigger }) {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Amount:</span>
-                <span className="font-bold text-emerald-400">₹{selectedPayment.amount_inr?.toLocaleString()}</span>
+                <span className="font-bold text-emerald-400">
+                  ₹{(selectedPayment.amount_inr || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Status:</span>

@@ -2,8 +2,7 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from routers import merchant, internal, intelligence, demo, payments, webhooks, copilot
 from intelligence.intelligence_data_service import get_intelligence_data_service
@@ -12,8 +11,35 @@ from intelligence.recovery_prediction_service import get_recovery_prediction_ser
 from database import init_db
 
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
-ALLOWED_ORIGINS_STR = os.environ.get("ALLOWED_ORIGINS", "*")
-ALLOWED_ORIGINS = [orig.strip() for orig in ALLOWED_ORIGINS_STR.split(",")]
+
+def validate_environment_config():
+    """
+    Validates required production environment configuration.
+    Fails safely with clear configuration error if required secrets are missing in production.
+    """
+    current_env = os.environ.get("ENVIRONMENT", "development")
+    if current_env == "production":
+        required_vars = ["RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"]
+        missing = [v for v in required_vars if not os.environ.get(v)]
+        if missing:
+            raise RuntimeError(
+                f"[CRITICAL SECURITY CONFIGURATION ERROR] Production environment is missing required variables: {', '.join(missing)}. "
+                "Please configure these variables in deployment environment or .env file before starting backend."
+            )
+
+# Execute production environment validation
+validate_environment_config()
+
+# Parse allowed CORS origins
+frontend_origin = os.environ.get("FRONTEND_ORIGIN", "")
+allowed_origins_str = os.environ.get("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = [orig.strip() for orig in allowed_origins_str.split(",") if orig.strip()]
+
+if frontend_origin and frontend_origin not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(frontend_origin)
+
+if not ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS = ["*"]
 
 # Initialize persistent SQLite database
 init_db()
@@ -24,6 +50,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Security Headers Middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 # CORS Middleware for React frontend
 app.add_middleware(

@@ -161,32 +161,35 @@ export default function MerchantDashboard({ onNavigate }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Revenue At Risk"
-          value={`₹${(dashboardData?.revenue_at_risk || 0).toLocaleString('en-IN')}`}
+          value={`₹${(dashboardData?.revenue_at_risk || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtitle={`${dashboardData?.failed_payments || 0} failed transactions`}
           icon={DollarSign}
           accentColor="rose"
           trend="At Risk"
           trendType="negative"
+          tooltip="Total value of failed or unrecovered transactions currently requiring recovery."
         />
 
         <StatCard
           title="Revenue Recovered"
-          value={`₹${(dashboardData?.revenue_recovered || 0).toLocaleString('en-IN')}`}
+          value={`₹${(dashboardData?.revenue_recovered || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           subtitle="Recovered by RecoverAI"
           icon={CheckCircle2}
           accentColor="emerald"
           trend="Active Recovery"
           trendType="positive"
+          tooltip="Total value of transactions legitimately recovered by RecoverAI."
         />
 
         <StatCard
           title="Recovery Rate"
-          value={`${dashboardData?.recovery_rate || 0}%`}
+          value={`${(dashboardData?.recovery_rate || 0).toFixed(2)}%`}
           subtitle="Overall conversion efficiency"
           icon={TrendingUp}
           accentColor="indigo"
           trend="Calculated Rate"
           trendType="positive"
+          tooltip="Confirmed recovered revenue divided by total at-risk plus recovered revenue."
         />
 
         <StatCard
@@ -197,6 +200,7 @@ export default function MerchantDashboard({ onNavigate }) {
           accentColor="cyan"
           trend={`${dashboardData?.active_recovery_cases || 0} Active`}
           trendType="neutral"
+          tooltip="Active failed payment recovery workflows currently requiring or undergoing retry."
         />
       </div>
 

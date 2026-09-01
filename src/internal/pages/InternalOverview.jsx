@@ -135,12 +135,13 @@ export default function InternalOverview({ onNavigate }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard
           title="Global Success Rate"
-          value={`${dashboardData?.overall_success_rate || 0}%`}
+          value={`${(dashboardData?.overall_success_rate || 0).toFixed(2)}%`}
           subtitle="Ecosystem conversion efficiency"
           icon={Activity}
           accentColor="emerald"
           trend="Live Dataset Rate"
           trendType="positive"
+          tooltip="Overall percentage of successful payment authorizations across the ecosystem."
         />
 
         <StatCard
@@ -151,6 +152,7 @@ export default function InternalOverview({ onNavigate }) {
           accentColor="rose"
           trend={`${dashboardData?.active_incidents || 0} Incidents`}
           trendType="negative"
+          tooltip="Infrastructure incidents currently active and requiring system reroute or mitigation."
         />
 
         <StatCard
@@ -159,8 +161,9 @@ export default function InternalOverview({ onNavigate }) {
           subtitle={`Out of ${(dashboardData?.total_transactions || 0).toLocaleString('en-IN')} total`}
           icon={Network}
           accentColor="amber"
-          trend={`${dashboardData?.overall_failure_rate || 0}% Failure Rate`}
+          trend={`${(dashboardData?.overall_failure_rate || 0).toFixed(2)}% Failure Rate`}
           trendType="neutral"
+          tooltip="Total failed payment attempts currently registered in SQLite."
         />
 
         <StatCard
@@ -169,8 +172,9 @@ export default function InternalOverview({ onNavigate }) {
           subtitle="Recovered via AI Smart Retries"
           icon={DollarSign}
           accentColor="cyan"
-          trend={`${dashboardData?.overall_recovery_rate || 0}% Recovery Rate`}
+          trend={`${(dashboardData?.overall_recovery_rate || 0).toFixed(2)}% Recovery Rate`}
           trendType="positive"
+          tooltip="Total value of failed payments successfully recovered by RecoverAI."
         />
       </div>
 

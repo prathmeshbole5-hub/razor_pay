@@ -1,4 +1,5 @@
 import React from 'react';
+import HelpTooltip from './HelpTooltip';
 
 export function Card({
   children,
@@ -46,6 +47,7 @@ export function StatCard({
   trend,
   trendType = 'positive', // positive | negative | neutral
   accentColor = 'indigo', // indigo | emerald | rose | cyan | amber
+  tooltip,
   className = ''
 }) {
   const accentClasses = {
@@ -66,7 +68,10 @@ export function StatCard({
     <Card className={`group relative overflow-hidden ${className}`}>
       <div className="flex items-start justify-between">
         <div className="space-y-1">
-          <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">{title}</p>
+            {tooltip && <HelpTooltip content={tooltip} title={title} />}
+          </div>
           <div className="text-2xl sm:text-3xl font-bold text-white tracking-tight">{value}</div>
         </div>
 
