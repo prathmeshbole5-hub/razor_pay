@@ -211,6 +211,47 @@ class LivePaymentService:
                         event_type="PAYMENT_SUCCESS",
                         description=f"Payment verified successfully via {payment_method or 'Card'}"
                     )
+
+                    # Close recovery loop if an active recovery action was executed
+                    try:
+                        from database import RecoveryActionModel
+                        act = db.query(RecoveryActionModel).filter(
+                            (RecoveryActionModel.payment_id == recoverai_payment_id) |
+                            (RecoveryActionModel.payment_id == (record.payment_id if record else ""))
+                        ).order_by(RecoveryActionModel.created_at.desc()).first()
+
+                        if act and act.recovery_state != "RECOVERED":
+                            act.recovery_state = "RECOVERED"
+                            act.status = "completed"
+                            amt_val = record.amount if record else (amount_inr or 0.0)
+                            self._log_event(
+                                db,
+                                payment_id=recoverai_payment_id,
+                                merchant_id=merchant_id,
+                                event_type="PAYMENT_RECOVERED",
+                                description=f"Payment successfully recovered! Amount: ₹{amt_val:,.2f}. Recovered Payment ID: {razorpay_payment_id}."
+                            )
+                        else:
+                            # Check if a recent failed payment for this merchant has an executed recovery action
+                            recent_action = db.query(RecoveryActionModel).filter(
+                                RecoveryActionModel.merchant_id == merchant_id,
+                                RecoveryActionModel.recovery_state.in_(["AWAITING_RETRY", "RETRY_SCHEDULED"])
+                            ).order_by(RecoveryActionModel.created_at.desc()).first()
+
+                            if recent_action and recent_action.recovery_state != "RECOVERED":
+                                recent_action.recovery_state = "RECOVERED"
+                                recent_action.status = "completed"
+                                amt_val = record.amount if record else (amount_inr or 0.0)
+                                self._log_event(
+                                    db,
+                                    payment_id=recent_action.payment_id,
+                                    merchant_id=merchant_id,
+                                    event_type="PAYMENT_RECOVERED",
+                                    description=f"Payment successfully recovered! Amount: ₹{amt_val:,.2f}. Recovered Payment ID: {razorpay_payment_id}."
+                                )
+                    except Exception as ex:
+                        print(f"[update_live_payment] Recovery closure notice: {ex}")
+
                 elif status in ["failed"]:
                     self._log_event(
                         db,

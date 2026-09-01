@@ -83,14 +83,15 @@ export default function Analytics() {
   const totalMethodFailures = methodFailures.reduce((sum, m) => sum + m.count, 0) || 1;
 
   const methodBreakdown = methodFailures.map((m) => {
-    const recoveryRate = Math.round(30 + (m.count % 40));
     return {
       name: m.method,
-      volume: m.count * 3500,
+      volume: m.volume || 0,
       failures: m.count,
-      recoveryRate: recoveryRate
+      recoveryRate: m.recovery_rate || 0
     };
   });
+
+  const core = analyticsData?.core_metrics;
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -118,61 +119,112 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Top Summary KPI Cards if available */}
+      {core && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Total Volume</span>
+            <div className="text-2xl font-extrabold text-white">
+              ₹{(core.total_volume || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">{core.total_transactions || 0} total transactions</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Revenue At Risk</span>
+            <div className="text-2xl font-extrabold text-rose-400">
+              ₹{(core.revenue_at_risk || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">{core.failed_transactions || 0} failed payments</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Revenue Recovered</span>
+            <div className="text-2xl font-extrabold text-emerald-400">
+              ₹{(core.revenue_recovered || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">{core.recovered_cases || 0} confirmed recovered cases</span>
+          </div>
+
+          <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+            <span className="text-xs text-slate-400 font-medium">Recovery Rate</span>
+            <div className="text-2xl font-extrabold text-cyan-400">
+              {(core.recovery_rate || 0).toFixed(2)}%
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">Confirmed recovery ratio</span>
+          </div>
+        </div>
+      )}
+
       {/* Grid 1: Failure Reason Distribution & AI Strategy Effectiveness */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Failure Reason Bar Chart */}
         <Card header="Top Failure Reasons" hover={false}>
-          <div className="h-64 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={failureReasonsChart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px', color: '#fff' }}
-                  formatter={(val, name, item) => [`${val}% (${item.payload.count} txns)`, 'Share']}
-                />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {failureReasonsChart.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-800 text-xs">
-            {failureReasonsChart.map((fr) => (
-              <div key={fr.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-950">
-                <span className="text-slate-400 font-medium truncate">{fr.name}</span>
-                <span className="font-bold text-white">{fr.count} txns</span>
+          {failureReasonsChart.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-xs text-slate-500">
+              No failure records found in database
+            </div>
+          ) : (
+            <>
+              <div className="h-64 w-full pt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={failureReasonsChart} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize: '12px', color: '#fff' }}
+                      formatter={(val, name, item) => [`${val}% (${item.payload.count} txns)`, 'Share']}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                      {failureReasonsChart.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-4 border-t border-slate-800 text-xs">
+                {failureReasonsChart.map((fr) => (
+                  <div key={fr.name} className="flex items-center justify-between p-2 rounded-lg bg-slate-950">
+                    <span className="text-slate-400 font-medium truncate">{fr.name}</span>
+                    <span className="font-bold text-white">{fr.count} txns</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </Card>
 
         {/* Strategy Conversion Performance */}
         <Card header="AI Strategy Effectiveness" hover={false}>
           <div className="space-y-4 pt-2">
-            {strategyPerformance.map((sc) => (
-              <div key={sc.strategy} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-white">{sc.strategy}</span>
-                  <span className="text-emerald-400 font-extrabold">{sc.rate}% Conversion</span>
-                </div>
-
-                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400"
-                    style={{ width: `${sc.rate}%` }}
-                  />
-                </div>
-
-                <div className="flex justify-between text-[11px] text-slate-400 pt-1">
-                  <span>{sc.attempts} attempts ({sc.recovered} recovered)</span>
-                  <span className="text-white font-bold">₹{(sc.revenue / 100000).toFixed(2)}L Recovered</span>
-                </div>
+            {strategyPerformance.length === 0 ? (
+              <div className="h-64 flex items-center justify-center text-xs text-slate-500">
+                No strategy performance data calculated yet
               </div>
-            ))}
+            ) : (
+              strategyPerformance.map((sc) => (
+                <div key={sc.strategy} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-white">{sc.strategy}</span>
+                    <span className="text-emerald-400 font-extrabold">{sc.rate}% Conversion</span>
+                  </div>
+
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400"
+                      style={{ width: `${sc.rate}%` }}
+                    />
+                  </div>
+
+                  <div className="flex justify-between text-[11px] text-slate-400 pt-1">
+                    <span>{sc.attempts} attempts ({sc.recovered} recovered)</span>
+                    <span className="text-white font-bold">₹{(sc.revenue || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })} Recovered</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </div>
@@ -185,26 +237,36 @@ export default function Analytics() {
               <tr>
                 <th className="py-3 px-4">Payment Method</th>
                 <th className="py-3 px-4">Failed Count</th>
+                <th className="py-3 px-4">Failed Volume (₹)</th>
                 <th className="py-3 px-4">Percentage Share</th>
                 <th className="py-3 px-4 text-right">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-slate-300">
-              {methodBreakdown.map((mb) => {
-                const share = Math.round((mb.failures / totalMethodFailures) * 100);
-                return (
-                  <tr key={mb.name} className="hover:bg-slate-800/40">
-                    <td className="py-3.5 px-4 font-semibold text-white">{mb.name}</td>
-                    <td className="py-3.5 px-4 font-bold text-slate-200">{mb.failures} failures</td>
-                    <td className="py-3.5 px-4 text-indigo-300 font-mono">{share}% of total</td>
-                    <td className="py-3.5 px-4 text-right">
-                      <Badge variant={share < 40 ? 'success' : 'warning'} size="sm">
-                        {share < 40 ? 'Optimal' : 'High Failure Volume'}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
+              {methodBreakdown.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-slate-500 text-xs">
+                    No payment method failure records found in database
+                  </td>
+                </tr>
+              ) : (
+                methodBreakdown.map((mb) => {
+                  const share = Math.round((mb.failures / totalMethodFailures) * 100);
+                  return (
+                    <tr key={mb.name} className="hover:bg-slate-800/40">
+                      <td className="py-3.5 px-4 font-semibold text-white">{mb.name}</td>
+                      <td className="py-3.5 px-4 font-bold text-slate-200">{mb.failures} failures</td>
+                      <td className="py-3.5 px-4 font-mono text-amber-400">₹{(mb.volume || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="py-3.5 px-4 text-indigo-300 font-mono">{share}% of total</td>
+                      <td className="py-3.5 px-4 text-right">
+                        <Badge variant={share < 40 ? 'success' : 'warning'} size="sm">
+                          {share < 40 ? 'Optimal' : 'High Failure Volume'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

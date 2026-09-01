@@ -5,10 +5,24 @@ import Badge from '../../shared/components/Badge';
 
 export default function AnomalyAlertBanner({ anomaly, onMitigate, onViewAffectedPayments }) {
   const [mitigated, setMitigated] = useState(anomaly?.status === 'MITIGATED');
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleMitigate = () => {
-    setMitigated(true);
-    if (onMitigate) onMitigate(anomaly.id || anomaly.incident_id);
+  const handleMitigate = async () => {
+    setIsExecuting(true);
+    setErrorMsg('');
+    const incId = anomaly.id || anomaly.incident_id;
+    try {
+      if (onMitigate) {
+        await onMitigate(incId);
+      }
+      setMitigated(true);
+    } catch (err) {
+      console.error('Mitigation execution failed:', err);
+      setErrorMsg(err.message || 'Mitigation failed. Retry');
+    } finally {
+      setIsExecuting(false);
+    }
   };
 
   const isTestWebhook = anomaly.source === 'razorpay_test_webhook';
@@ -61,6 +75,12 @@ export default function AnomalyAlertBanner({ anomaly, onMitigate, onViewAffected
             <Sparkles className="w-4 h-4 text-cyan-400 shrink-0" />
             <span><strong>Recommended System Action:</strong> {anomaly.recommendedAction || anomaly.recommended_mitigation}</span>
           </div>
+
+          {errorMsg && (
+            <div className="text-xs text-rose-400 font-semibold bg-rose-950/60 border border-rose-500/30 p-2 rounded-xl">
+              {errorMsg}
+            </div>
+          )}
         </div>
 
         {/* Impact Box & Actions Trigger */}
@@ -98,9 +118,10 @@ export default function AnomalyAlertBanner({ anomaly, onMitigate, onViewAffected
                 size="md"
                 icon={ArrowRight}
                 iconPosition="right"
+                disabled={isExecuting}
                 onClick={handleMitigate}
               >
-                Execute Mitigation Reroute
+                {isExecuting ? 'Executing mitigation...' : 'Execute Mitigation Reroute'}
               </Button>
             )}
           </div>

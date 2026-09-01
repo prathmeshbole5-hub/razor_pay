@@ -159,14 +159,15 @@ def test_merchant_dashboard_dynamic_suite():
     clear_db()
     db = SessionLocal()
     try:
-        # Failed payment INR 2000 + executed recovery action
+        # Failed payment INR 2000 + executed recovery action in TEST_SIMULATION
         p6 = LivePaymentModel(
             payment_id="pay_test_m6_act", order_id="order_test_m6_act", merchant_id=test_merchant_id,
             amount=2000.0, currency="INR", status="failed", bank="ICICI UPI"
         )
         act = RecoveryActionModel(
             payment_id="pay_test_m6_act", merchant_id=test_merchant_id,
-            action_type="smart_retry", status="executed"
+            action_type="smart_retry", status="executed", execution_mode="TEST_SIMULATION",
+            recovery_state="AWAITING_RETRY"
         )
         db.add_all([p6, act])
         db.commit()
@@ -174,9 +175,24 @@ def test_merchant_dashboard_dynamic_suite():
         db.close()
 
     dash = merchant_service.get_dashboard(test_merchant_id)
-    assert dash["revenue_recovered"] == 2000.0, f"Expected 2000.0 recovered, got {dash['revenue_recovered']}"
-    assert dash["active_recovery_cases"] == 0, f"Expected 0 active cases, got {dash['active_recovery_cases']}"
-    print("[OK] Test 6 Passed: Executed recovery action transitioned INR 2,000 to recovered and decremented active cases.")
+    # Under Prompt 4 safety rule: action execution does not inflate revenue_recovered
+    assert dash["revenue_recovered"] == 0.0, f"Expected 0.0 recovered, got {dash['revenue_recovered']}"
+    assert dash["revenue_at_risk"] == 2000.0, f"Expected 2000.0 at risk, got {dash['revenue_at_risk']}"
+
+    # When recovery state transitions to RECOVERED (via real payment success):
+    db = SessionLocal()
+    try:
+        act_rec = db.query(RecoveryActionModel).filter_by(payment_id="pay_test_m6_act").first()
+        act_rec.recovery_state = "RECOVERED"
+        act_rec.status = "completed"
+        db.commit()
+    finally:
+        db.close()
+
+    dash_rec = merchant_service.get_dashboard(test_merchant_id)
+    assert dash_rec["revenue_recovered"] == 2000.0, f"Expected 2000.0 recovered, got {dash_rec['revenue_recovered']}"
+    assert dash_rec["active_recovery_cases"] == 0, f"Expected 0 active cases, got {dash_rec['active_recovery_cases']}"
+    print("[OK] Test 6 Passed: Action execution preserves INR 2,000 at risk, and actual RECOVERED state updates recovered revenue.")
 
     # ----------------------------------------------------
     # TEST 7: Dashboard API Response Verification via TestClient

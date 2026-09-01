@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, Clock, Zap, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, Search, CheckCircle2, Clock, Zap, AlertTriangle, ShieldAlert, ArrowUpRight } from 'lucide-react';
 import { Card } from '../../shared/components/Card';
 import Badge from '../../shared/components/Badge';
 import Button from '../../shared/components/Button';
@@ -8,9 +8,12 @@ import { getRecoveryCases } from '../../api/merchantApi';
 import { CURRENT_MERCHANT_ID } from '../../config/currentMerchant';
 
 export default function RecoveryCases() {
-  const [recoveryCases, setRecoveryCases] = useState([]);
+  const [rawCases, setRawCases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('ALL');
 
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -20,39 +23,48 @@ export default function RecoveryCases() {
     setError(null);
     try {
       const data = await getRecoveryCases(CURRENT_MERCHANT_ID);
-      const stagesList = ['Payment Failed', 'AI Diagnostics', 'Retry Scheduled', 'Customer Contacted', 'Revenue Recovered'];
+      const stagesList = ['Payment Failed', 'AI Diagnostics', 'Action Executed', 'Awaiting Retry', 'Revenue Recovered'];
       
       const mapped = (data || []).map((rc) => {
-        const isRecovered = rc.attempt_status === 'Recovered';
-        const isPending = rc.attempt_status === 'Pending';
-        const currentStage = isRecovered ? 4 : isPending ? 2 : 1;
-        const probPct = Math.round(rc.predicted_recovery_probability * 100);
+        const recState = rc.recovery_state || rc.case_status || (rc.attempt_status === 'Recovered' ? 'RECOVERED' : 'AWAITING_RETRY');
+        const isRecovered = recState === 'RECOVERED' || ['captured', 'verified', 'successful'].includes((rc.payment_status || '').toLowerCase());
+        const isExecuted = rc.action_status === 'EXECUTED' || rc.execution_status === 'EXECUTED' || rc.attempt_status === 'Pending';
+        
+        const currentStage = isRecovered ? 4 : isExecuted ? 3 : 1;
+        const prob = rc.recovery_probability ?? rc.predicted_recovery_probability ?? 0.65;
+        const probPct = Math.round(prob * 100);
+        const amountVal = rc.amount ?? rc.amount_inr ?? 0;
 
         return {
-          caseId: `REC-${rc.payment_id}`,
+          caseId: rc.case_id || `REC-${(rc.payment_id || '').replace('pay_live_', '').replace('pay_', '')}`,
           paymentId: rc.payment_id,
           merchantId: rc.merchant_id || CURRENT_MERCHANT_ID,
-          customer: `Customer (${rc.payment_id.slice(-4)})`,
-          amount: rc.amount_inr ?? rc.amount,
-          method: 'Card / UPI',
-          gateway: 'Razorpay System',
-          failureReason: 'Payment Recovery Case in Pipeline',
-          errorCode: 'PIPELINE_CASE',
-          bank: 'Partner Bank',
-          attempts: rc.attempt_number || 1,
-          status: isRecovered ? 'RECOVERED' : isPending ? 'IN_RECOVERY' : 'ACTION_REQUIRED',
-          strategy: rc.strategy,
-          attemptNumber: rc.attempt_number,
-          delayMinutes: rc.delay_minutes,
-          attemptStatus: rc.attempt_status,
-          estimatedRecoveryProb: `${(rc.predicted_recovery_probability * 100).toFixed(1)}%`,
+          customer: `Customer (${(rc.payment_id || '').slice(-4)})`,
+          amount: amountVal,
+          method: rc.payment_method || 'Card / UPI',
+          gateway: rc.gateway || 'Razorpay Gateway',
+          failureReason: rc.failure_reason || rc.failure_category || 'Payment Authorization Failed',
+          errorCode: rc.error_code || 'BAD_REQUEST',
+          rootCause: rc.root_cause || '3DS / Card Auth Timeout',
+          status: isRecovered ? 'RECOVERED' : isExecuted ? 'AWAITING_RETRY' : 'ACTION_REQUIRED',
+          paymentStatus: rc.payment_status || (isRecovered ? 'captured' : 'failed'),
+          strategy: rc.strategy || rc.recommended_strategy || 'Alternate Payment Method',
+          actionStatus: rc.action_status || rc.execution_status || 'ACTION_REQUIRED',
+          executionMode: rc.execution_mode || 'TEST_SIMULATION',
+          recoveryState: recState,
+          attemptStatus: rc.attempt_status || (isRecovered ? 'Recovered' : 'Pending'),
+          estimatedRecoveryProb: `${probPct}%`,
           aiConfidence: probPct,
+          incidentId: rc.incident_id,
+          incidentTitle: rc.incident_title,
           currentStage: currentStage,
           stages: stagesList,
-          scheduledTime: rc.resolved_at ? `Resolved ${rc.resolved_at}` : `Within ${rc.delay_minutes} min window`
+          createdTime: rc.created_at || 'Just now',
+          executedTime: rc.executed_at,
+          recoveredTime: rc.recovered_at
         };
       });
-      setRecoveryCases(mapped);
+      setRawCases(mapped);
     } catch (err) {
       console.error('Failed to fetch merchant recovery cases:', err);
       setError(err.message || 'Failed to fetch recovery cases');
@@ -63,7 +75,58 @@ export default function RecoveryCases() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Top dynamic summary metrics
+  const metrics = useMemo(() => {
+    const total = rawCases.length;
+    const recoveredCases = rawCases.filter(c => c.recoveryState === 'RECOVERED' || c.paymentStatus === 'captured');
+    const activeCases = rawCases.filter(c => c.recoveryState !== 'RECOVERED' && c.paymentStatus !== 'captured');
+    const awaitingRetryCases = rawCases.filter(c => c.actionStatus === 'EXECUTED' && c.recoveryState !== 'RECOVERED');
+
+    const amountInRecovery = activeCases.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const amountRecovered = recoveredCases.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const totalRisk = amountInRecovery + amountRecovered;
+    const successRate = totalRisk > 0 ? ((amountRecovered / totalRisk) * 100).toFixed(1) : '0.0';
+
+    return {
+      total,
+      activeCount: activeCases.length,
+      awaitingCount: awaitingRetryCases.length,
+      recoveredCount: recoveredCases.length,
+      amountInRecovery,
+      amountRecovered,
+      successRate
+    };
+  }, [rawCases]);
+
+  // Filtered case list
+  const filteredCases = useMemo(() => {
+    return rawCases.filter((rc) => {
+      // Status Filter
+      if (filterStatus === 'OPEN' && rc.recoveryState === 'RECOVERED') return false;
+      if (filterStatus === 'ACTION_EXECUTED' && rc.actionStatus !== 'EXECUTED') return false;
+      if (filterStatus === 'AWAITING_RETRY' && (rc.recoveryState !== 'AWAITING_RETRY' || rc.paymentStatus === 'captured')) return false;
+      if (filterStatus === 'RECOVERED' && rc.recoveryState !== 'RECOVERED' && rc.paymentStatus !== 'captured') return false;
+
+      // Search Query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const match =
+          rc.paymentId.toLowerCase().includes(q) ||
+          rc.caseId.toLowerCase().includes(q) ||
+          rc.failureReason.toLowerCase().includes(q) ||
+          rc.rootCause.toLowerCase().includes(q) ||
+          rc.strategy.toLowerCase().includes(q) ||
+          (rc.incidentId && rc.incidentId.toLowerCase().includes(q));
+        if (!match) return false;
+      }
+
+      return true;
+    });
+  }, [rawCases, filterStatus, searchQuery]);
 
   const handleOpenDrawer = (rcCase) => {
     setSelectedPayment({
@@ -75,18 +138,17 @@ export default function RecoveryCases() {
       gateway: rcCase.gateway,
       failureReason: rcCase.failureReason,
       errorCode: rcCase.errorCode,
-      bank: rcCase.bank,
-      attempts: rcCase.attempts,
-      status: rcCase.status
+      bank: rcCase.gateway,
+      status: rcCase.paymentStatus
     });
     setDrawerOpen(true);
   };
 
-  if (loading) {
+  if (loading && rawCases.length === 0) {
     return (
       <div className="space-y-6 animate-fadeIn p-4">
         <div className="h-16 bg-slate-900/80 border border-slate-800 rounded-2xl animate-pulse" />
-        <div className="h-14 bg-slate-900/80 border border-slate-800 rounded-2xl animate-pulse" />
+        <div className="h-24 bg-slate-900/80 border border-slate-800 rounded-2xl animate-pulse" />
         <div className="grid grid-cols-1 gap-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-44 bg-slate-900/80 border border-slate-800 rounded-2xl animate-pulse" />
@@ -96,12 +158,12 @@ export default function RecoveryCases() {
     );
   }
 
-  if (error) {
+  if (error && rawCases.length === 0) {
     return (
       <div className="bg-rose-950/40 border border-rose-500/30 p-6 rounded-2xl space-y-4 animate-fadeIn">
         <div className="flex items-center gap-3 text-rose-400 font-bold">
           <AlertTriangle className="w-5 h-5" />
-          <span>Failed to load active recovery cases</span>
+          <span>Unable to load recovery cases</span>
         </div>
         <p className="text-xs text-slate-300">{error}</p>
         <Button variant="outline" size="sm" onClick={loadData}>
@@ -111,134 +173,221 @@ export default function RecoveryCases() {
     );
   }
 
-  const activeCasesCount = recoveryCases.filter((c) => c.attemptStatus === 'Pending').length;
-
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-white">Active Recovery Cases Lifecycle</h2>
+          <h2 className="text-xl font-bold text-white">Active Recovery Cases Workspace</h2>
           <p className="text-xs text-slate-400">
-            Real-time pipeline tracking showing AI diagnostics, smart retries, and customer nudge progress.
+            Database-driven recovery cases powered by SQLite single source of truth and ML intelligence.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Badge variant="brand" size="md">
-            {activeCasesCount} Active Pipeline Cases ({recoveryCases.length} Total)
+            {metrics.activeCount} Active Cases ({metrics.total} Total)
           </Badge>
+          <Button variant="outline" size="xs" icon={RefreshCw} onClick={loadData}>
+            Refresh
+          </Button>
         </div>
       </div>
 
-      {/* Pipeline Summary Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
-        {['Payment Failed', 'AI Diagnostics', 'Retry Scheduled', 'Customer Contacted', 'Revenue Recovered'].map((step, idx) => (
-          <div key={idx} className="flex flex-col items-center text-center space-y-1">
-            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Step 0{idx + 1}</span>
-            <span className="text-xs font-semibold text-slate-200">{step}</span>
+      {/* Top Dynamic Summary Metric Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+          <span className="text-xs text-slate-400 font-medium">Amount in Recovery</span>
+          <div className="text-2xl font-extrabold text-amber-400">
+            ₹{metrics.amountInRecovery.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </div>
-        ))}
+          <span className="text-[10px] text-slate-500 font-mono">{metrics.activeCount} active cases pending</span>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+          <span className="text-xs text-slate-400 font-medium">Amount Recovered</span>
+          <div className="text-2xl font-extrabold text-emerald-400">
+            ₹{metrics.amountRecovered.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </div>
+          <span className="text-[10px] text-slate-500 font-mono">{metrics.recoveredCount} verified successful cases</span>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+          <span className="text-xs text-slate-400 font-medium">Recovery Success Rate</span>
+          <div className="text-2xl font-extrabold text-cyan-400">
+            {metrics.successRate}%
+          </div>
+          <span className="text-[10px] text-slate-500 font-mono">Confirmed recovery ratio</span>
+        </div>
+
+        <div className="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl space-y-1">
+          <span className="text-xs text-slate-400 font-medium">Awaiting Customer Retry</span>
+          <div className="text-2xl font-extrabold text-indigo-400">
+            {metrics.awaitingCount}
+          </div>
+          <span className="text-[10px] text-slate-500 font-mono">Executed recovery workflows</span>
+        </div>
       </div>
 
-      {/* Case Cards Grid */}
-      <div className="space-y-4">
-        {recoveryCases.slice(0, 15).map((rc) => {
-          const isComplete = rc.attemptStatus === 'Recovered';
-          const isFailed = rc.attemptStatus === 'Failed';
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-slate-900/80 border border-slate-800 p-3 rounded-2xl">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search payment ID, case ID, root cause, strategy, or incident ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 text-xs text-slate-200 pl-9 pr-4 py-2 rounded-xl focus:outline-none focus:border-brand-500 font-mono"
+          />
+        </div>
 
-          return (
-            <Card key={rc.caseId} className="space-y-5" hover={false}>
-              {/* Header Info */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-                <div className="flex items-start gap-3">
-                  <div className={`p-3 rounded-xl border ${
-                    isComplete 
-                      ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-                      : isFailed 
-                      ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                      : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
-                  }`}>
-                    <RefreshCw className={`w-5 h-5 ${!isComplete && !isFailed ? 'animate-spin' : ''}`} />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-slate-400">{rc.caseId}</span>
-                      <span className="text-xs font-semibold text-white">Payment #{rc.paymentId}</span>
-                      <Badge variant={isComplete ? 'success' : isFailed ? 'danger' : 'brand'} size="sm">
-                        {isComplete ? 'RECOVERED' : isFailed ? 'FAILED' : 'IN RECOVERY'}
-                      </Badge>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+          {[
+            { id: 'ALL', label: 'All', count: rawCases.length },
+            { id: 'OPEN', label: 'Active', count: metrics.activeCount },
+            { id: 'AWAITING_RETRY', label: 'Awaiting Retry', count: metrics.awaitingCount },
+            { id: 'RECOVERED', label: 'Recovered', count: metrics.recoveredCount }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setFilterStatus(tab.id)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                filterStatus === tab.id
+                  ? 'bg-brand-500/20 text-brand-400 border border-brand-500/30'
+                  : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-slate-800 text-slate-300 font-mono">
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Case Cards Grid / Empty State */}
+      {filteredCases.length === 0 ? (
+        <Card className="p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-500">
+            <Zap className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">No active recovery cases match filter</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            RecoverAI has no active payment cases matching your search criteria. All real failed payments from SQLite database are displayed above.
+          </p>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredCases.map((rc) => {
+            const isRecovered = rc.recoveryState === 'RECOVERED' || rc.paymentStatus === 'captured';
+            const isExecuted = rc.actionStatus === 'EXECUTED';
+
+            return (
+              <Card key={rc.caseId} className="space-y-4 hover:border-slate-700 transition-colors" hover={false}>
+                {/* Header Info */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-800/80">
+                  <div className="flex items-start gap-3">
+                    <div className={`p-3 rounded-xl border ${
+                      isRecovered 
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                        : isExecuted 
+                        ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    }`}>
+                      <RefreshCw className={`w-5 h-5 ${isExecuted && !isRecovered ? 'animate-spin' : ''}`} />
                     </div>
-                    <div className="text-sm font-bold text-white mt-0.5">
-                      {rc.customer} • <span className="text-emerald-400">₹{(rc.amount ?? 0).toLocaleString('en-IN')}</span>
-                    </div>
-                  </div>
-                </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-mono font-bold text-slate-400">{rc.caseId}</span>
+                        <span className="text-xs font-semibold text-white font-mono">Payment #{rc.paymentId}</span>
+                        
+                        <Badge variant={isRecovered ? 'success' : isExecuted ? 'brand' : 'warning'} size="sm">
+                          {isRecovered ? 'RECOVERED' : isExecuted ? 'AWAITING RETRY' : 'ACTION REQUIRED'}
+                        </Badge>
 
-                <div className="text-right space-y-0.5">
-                  <div className="text-xs text-slate-400 font-medium">Estimated Recovery Probability</div>
-                  <div className="text-lg font-extrabold text-emerald-400">{rc.estimatedRecoveryProb}</div>
-                </div>
-              </div>
-
-              {/* Progress Stepper Visualizer */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs text-slate-400 font-medium">
-                  <span>Strategy: <strong className="text-indigo-300">{rc.strategy}</strong></span>
-                  <span>Status: <strong className="text-slate-200">{rc.stages[rc.currentStage]}</strong></span>
-                </div>
-
-                <div className="grid grid-cols-5 gap-2">
-                  {rc.stages.map((stgLabel, idx) => {
-                    const isDone = idx <= rc.currentStage;
-                    const isCurrent = idx === rc.currentStage;
-
-                    return (
-                      <div key={idx} className="space-y-1">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-300 ${
-                            isDone
-                              ? isComplete
-                                ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
-                                : isFailed && idx === rc.currentStage
-                                ? 'bg-rose-500 shadow-sm shadow-rose-500/50'
-                                : 'bg-indigo-500 shadow-sm shadow-indigo-500/50'
-                              : 'bg-slate-800'
-                          }`}
-                        />
-                        <span className={`text-[10px] block truncate font-medium ${isCurrent ? 'text-white font-bold' : isDone ? 'text-slate-300' : 'text-slate-600'}`}>
-                          {stgLabel}
-                        </span>
+                        {isExecuted && (
+                          <Badge variant="outline" size="sm">
+                            TEST SIMULATION MODE
+                          </Badge>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* Strategy & Action Details */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-800/80 bg-slate-950/40 p-3 rounded-xl">
-                <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <Clock className="w-4 h-4 text-slate-500" />
-                  <span>Next Action Window: <strong className="text-white">{rc.scheduledTime}</strong></span>
+                      <div className="text-sm font-bold text-white mt-1 flex items-center gap-2">
+                        <span>{rc.customer}</span>
+                        <span>•</span>
+                        <span className="text-emerald-400">₹{(rc.amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span>•</span>
+                        <span className="text-slate-400 text-xs font-normal">{rc.method}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right space-y-0.5 shrink-0">
+                    <div className="text-[11px] text-slate-400 font-medium">Estimated Recovery Probability</div>
+                    <div className="text-lg font-extrabold text-emerald-400">{rc.estimatedRecoveryProb}</div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-indigo-400 font-bold">{rc.aiConfidence}% AI Confidence</span>
-                  <Button variant="outline" size="sm" onClick={() => handleOpenDrawer(rc)}>
-                    View AI Intelligence
+                {/* Diagnostics Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Failure Reason</span>
+                    <span className="text-rose-400 font-medium block truncate" title={rc.failureReason}>
+                      {rc.failureReason}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">AI Root Cause</span>
+                    <span className="text-slate-200 font-semibold block truncate" title={rc.rootCause}>
+                      {rc.rootCause} ({rc.aiConfidence}% Confidence)
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-500 block text-[11px]">Recommended Strategy</span>
+                    <span className="text-indigo-300 font-semibold block truncate" title={rc.strategy}>
+                      {rc.strategy}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Incident Link Banner (if associated) */}
+                {rc.incidentId && (
+                  <div className="flex items-center justify-between text-xs bg-amber-500/10 border border-amber-500/20 text-amber-300 p-2.5 rounded-xl">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>Linked Incident: <strong>{rc.incidentTitle || rc.incidentId}</strong></span>
+                    </div>
+                    <span className="text-[10px] font-mono text-amber-400 font-bold uppercase">{rc.incidentId}</span>
+                  </div>
+                )}
+
+                {/* Footer Controls */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Created: {rc.createdTime.slice(0, 19).replace('T', ' ')}</span>
+                  </div>
+
+                  <Button variant="outline" size="sm" icon={ArrowUpRight} onClick={() => handleOpenDrawer(rc)}>
+                    View AI Diagnostics & Operational Drawer
                   </Button>
                 </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Payment Detail Drawer */}
       <PaymentDetailDrawer
         payment={selectedPayment}
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        onActionExecuted={loadData}
       />
     </div>
   );

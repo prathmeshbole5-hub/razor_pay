@@ -86,12 +86,11 @@ def test_internal_incident_pipeline():
 
         inc = db.query(InfrastructureIncidentModel).filter(
             (InfrastructureIncidentModel.payment_id == test_payment_id) |
-            (InfrastructureIncidentModel.payment_id == recovered_rec.payment_id) |
-            (InfrastructureIncidentModel.gateway == "SBI")
+            (InfrastructureIncidentModel.gateway.in_(["SBI", "SBI Card Gateway"]))
         ).order_by(InfrastructureIncidentModel.created_at.desc()).first()
 
         assert inc is not None, "Infrastructure incident was not created!"
-        assert inc.gateway == "SBI", f"Expected SBI, got {inc.gateway}"
+        assert "SBI" in inc.gateway, f"Expected SBI gateway, got {inc.gateway}"
         assert inc.amount_at_risk > 0, f"Expected > 0, got {inc.amount_at_risk}"
         assert inc.source == "razorpay_test_webhook", f"Expected razorpay_test_webhook, got {inc.source}"
         print(f"[OK] SQLite Incident Verified: ID={inc.incident_id}, Title='{inc.title}', Risk=INR {inc.amount_at_risk}, Source={inc.source}")
@@ -116,7 +115,7 @@ def test_internal_incident_pipeline():
     res_inc = client.get("/api/internal/incidents")
     assert res_inc.status_code == 200
     all_incidents = res_inc.json()
-    matching = [i for i in all_incidents if i.get("gateway") == "SBI" and i.get("source") == "razorpay_test_webhook"]
+    matching = [i for i in all_incidents if "SBI" in i.get("gateway", "") and i.get("source") == "razorpay_test_webhook"]
     assert len(matching) > 0, "Real test incident not found in GET /api/internal/incidents response!"
     print(f"[OK] Razorpay Internal API returned real test incident: '{matching[0]['title']}'")
 

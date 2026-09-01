@@ -65,6 +65,11 @@ class RecoveryActionModel(Base):
     payment_id = Column(String(100), index=True, nullable=False)
     merchant_id = Column(String(50), index=True, nullable=False)
     action_type = Column(String(50), nullable=False)
+    incident_id = Column(String(100), nullable=True)
+    execution_mode = Column(String(50), default="TEST_SIMULATION")
+    recovery_state = Column(String(50), default="AWAITING_RETRY")
+    strategy_name = Column(String(100), nullable=True)
+    next_step = Column(Text, nullable=True)
     status = Column(String(50), default="executed")
     execution_result = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -114,14 +119,47 @@ class InfrastructureIncidentModel(Base):
     status = Column(String(50), default="ACTIVE")
     source = Column(String(50), default="razorpay_test_webhook")
     affected_transactions_count = Column(Integer, default=1)
+    grouping_key = Column(String(150), index=True, nullable=True)
+    affected_payment_ids = Column(Text, nullable=True)
+    impacted_merchants_count = Column(Integer, default=1)
     mitigated_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 def init_db():
-    """Initializes SQLite database tables automatically."""
+    """Initializes SQLite database tables automatically and applies schema migrations."""
+    from sqlalchemy import text
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.connect() as conn:
+            # Infrastructure Incidents migrations
+            res_inc = conn.execute(text("PRAGMA table_info(infrastructure_incidents)")).fetchall()
+            cols_inc = [row[1] for row in res_inc] if res_inc else []
+            if "grouping_key" not in cols_inc:
+                conn.execute(text("ALTER TABLE infrastructure_incidents ADD COLUMN grouping_key VARCHAR(150)"))
+            if "affected_payment_ids" not in cols_inc:
+                conn.execute(text("ALTER TABLE infrastructure_incidents ADD COLUMN affected_payment_ids TEXT"))
+            if "impacted_merchants_count" not in cols_inc:
+                conn.execute(text("ALTER TABLE infrastructure_incidents ADD COLUMN impacted_merchants_count INTEGER DEFAULT 1"))
+
+            # Recovery Actions migrations
+            res_act = conn.execute(text("PRAGMA table_info(recovery_actions)")).fetchall()
+            cols_act = [row[1] for row in res_act] if res_act else []
+            if "incident_id" not in cols_act:
+                conn.execute(text("ALTER TABLE recovery_actions ADD COLUMN incident_id VARCHAR(100)"))
+            if "execution_mode" not in cols_act:
+                conn.execute(text("ALTER TABLE recovery_actions ADD COLUMN execution_mode VARCHAR(50) DEFAULT 'TEST_SIMULATION'"))
+            if "recovery_state" not in cols_act:
+                conn.execute(text("ALTER TABLE recovery_actions ADD COLUMN recovery_state VARCHAR(50) DEFAULT 'AWAITING_RETRY'"))
+            if "strategy_name" not in cols_act:
+                conn.execute(text("ALTER TABLE recovery_actions ADD COLUMN strategy_name VARCHAR(100)"))
+            if "next_step" not in cols_act:
+                conn.execute(text("ALTER TABLE recovery_actions ADD COLUMN next_step TEXT"))
+
+            conn.commit()
+    except Exception as e:
+        print(f"[init_db] Column migration notice: {e}")
 
 
 def get_db():

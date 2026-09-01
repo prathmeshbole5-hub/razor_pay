@@ -222,23 +222,63 @@ export default function PaymentDetailDrawer({ payment, isOpen, onClose, onAction
           ) : null}
         </div>
 
-        {/* Executed Actions History (if any) */}
+        {/* Executed Recovery Action Lifecycle Card */}
         {actionHistory.length > 0 && (
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-emerald-400" />
-              Executed Recovery Actions ({actionHistory.length})
+              Recovery Action Lifecycle ({actionHistory.length})
             </h4>
-            <div className="space-y-1.5">
-              {actionHistory.map((act) => (
-                <div key={act.action_id} className="bg-slate-950 p-2.5 rounded-xl border border-emerald-500/20 text-xs flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="font-semibold text-slate-200 uppercase">{act.action_type.replace('_', ' ')}</span>
+            <div className="space-y-2">
+              {actionHistory.map((act) => {
+                const stratName = act.strategy || act.action_type?.replace(/_/g, ' ').toUpperCase() || 'RECOVERY ACTION';
+                const modeName = act.execution_mode || 'TEST_SIMULATION';
+                const execStatus = act.execution_status || 'ACTION EXECUTED';
+                const recState = ['captured', 'verified', 'successful'].includes((payment.status || '').toLowerCase())
+                  ? 'RECOVERED'
+                  : (act.recovery_state || 'AWAITING RETRY');
+
+                return (
+                  <div key={act.action_id} className="bg-slate-950 p-3.5 rounded-xl border border-emerald-500/30 text-xs space-y-2 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="font-bold text-slate-100 uppercase tracking-wide">{stratName}</span>
+                      </div>
+                      <Badge variant={recState === 'RECOVERED' ? 'success' : 'brand'} size="sm">
+                        {execStatus}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                      <div>
+                        <span className="text-slate-500 block">Execution Mode</span>
+                        <span className="text-amber-400 font-mono font-semibold">{modeName.replace(/_/g, ' ')}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Recovery Status</span>
+                        <span className={`font-semibold ${recState === 'RECOVERED' ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                          {recState.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {act.result && (
+                      <div className="text-[11px] text-slate-300">
+                        <span className="text-slate-400 font-semibold">Result: </span>
+                        <span>{typeof act.result === 'string' ? act.result : JSON.stringify(act.result)}</span>
+                      </div>
+                    )}
+
+                    {act.next_step && (
+                      <div className="text-[11px] text-slate-400 border-t border-slate-800/80 pt-1.5 flex justify-between items-center">
+                        <span><strong className="text-slate-300">Next Step:</strong> {act.next_step}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{act.created_at.slice(0, 19).replace('T', ' ')}</span>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-[10px] text-slate-400 font-mono">{act.created_at.slice(0, 19).replace('T', ' ')}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

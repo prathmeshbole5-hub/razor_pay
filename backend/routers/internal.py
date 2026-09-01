@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from services.internal_service import InternalService
 from intelligence.intelligence_data_service import get_intelligence_data_service
 from services.root_cause_service import get_root_cause_service
@@ -49,7 +49,7 @@ def get_infrastructure_incident_by_id(incident_id: str):
     for inc in incidents:
         if inc.get("id") == incident_id or inc.get("incident_id") == incident_id:
             return inc
-    return {"error": "Incident not found", "incident_id": incident_id}
+    raise HTTPException(status_code=404, detail=f"Infrastructure incident '{incident_id}' not found.")
 
 @router.get("/incidents/{incident_id}/payments")
 def get_infrastructure_incident_affected_payments(incident_id: str):
@@ -57,7 +57,10 @@ def get_infrastructure_incident_affected_payments(incident_id: str):
     Retrieves all live persisted payment records contributing to an infrastructure incident.
     """
     from services.infrastructure_incident_service import get_infrastructure_incident_service
-    return get_infrastructure_incident_service().get_affected_payments(incident_id)
+    res = get_infrastructure_incident_service().get_affected_payments(incident_id)
+    if res is None or res.get("status") == "error":
+        raise HTTPException(status_code=404, detail=f"Infrastructure incident '{incident_id}' not found.")
+    return res
 
 @router.post("/incidents/{incident_id}/mitigate")
 def mitigate_infrastructure_incident(incident_id: str):
@@ -66,7 +69,11 @@ def mitigate_infrastructure_incident(incident_id: str):
     Updates incident status to MITIGATED and records audit event in SQLite DB.
     """
     from services.infrastructure_incident_service import get_infrastructure_incident_service
-    return get_infrastructure_incident_service().mitigate_incident(incident_id)
+    res = get_infrastructure_incident_service().mitigate_incident(incident_id)
+    if not res or res.get("status") == "error":
+        detail_msg = res.get("message") if res else f"Infrastructure incident '{incident_id}' not found."
+        raise HTTPException(status_code=404, detail=detail_msg)
+    return res
 
 # INTERNAL OPERATIONS INTELLIGENCE ENDPOINTS
 
