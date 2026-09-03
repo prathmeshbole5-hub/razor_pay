@@ -48,18 +48,24 @@ export default function AICopilot() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const handleSendMessage = async (textToSend) => {
-    const query = textToSend || inputQuery;
+  const handleSendMessage = async (textToSend, retryQuery = null) => {
+    const query = retryQuery || textToSend || inputQuery;
     if (!query.trim()) return;
 
-    const userMsg = { id: `u_${Date.now()}`, sender: 'user', text: query };
-    setMessages((prev) => [...prev, userMsg]);
-    setInputQuery('');
+    if (!retryQuery) {
+      const userMsg = { id: `u_${Date.now()}`, sender: 'user', text: query };
+      setMessages((prev) => [...prev, userMsg]);
+      setInputQuery('');
+    }
     setLoading(true);
 
+    const history = messages
+      .filter((m) => !m.isError)
+      .map((m) => ({ sender: m.sender, text: m.text }));
+
     try {
-      const apiRes = await fetchCopilotQuery(query, 'm_1004', 'merchant');
-      if (apiRes && apiRes.text) {
+      const apiRes = await fetchCopilotQuery(query, 'm_1004', 'merchant', history);
+      if (apiRes && !apiRes.error && apiRes.text) {
         setMessages((prev) => [
           ...prev,
           {
@@ -75,12 +81,29 @@ export default function AICopilot() {
           }
         ]);
       } else {
-        const fallback = generateAICopilotResponse(query, merchantStats, merchantFailedPayments);
-        setMessages((prev) => [...prev, { id: `ai_${Date.now()}`, sender: 'ai', ...fallback }]);
+        const errorText = apiRes?.message || 'AI Copilot is temporarily unavailable. Please retry.';
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `ai_err_${Date.now()}`,
+            sender: 'ai',
+            isError: true,
+            failedQuery: query,
+            text: errorText
+          }
+        ]);
       }
     } catch (err) {
-      const fallback = generateAICopilotResponse(query, merchantStats, merchantFailedPayments);
-      setMessages((prev) => [...prev, { id: `ai_${Date.now()}`, sender: 'ai', ...fallback }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai_err_${Date.now()}`,
+          sender: 'ai',
+          isError: true,
+          failedQuery: query,
+          text: 'AI Copilot is temporarily unavailable. Please retry.'
+        }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -165,56 +188,75 @@ export default function AICopilot() {
                     : 'bg-slate-950 border border-slate-800 text-slate-200 shadow-xl'
                 }`}
               >
-                <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
-
-                {/* Payment Card Preview if available */}
-                {msg.payment_card && (
-                  <div className="bg-slate-900/90 border border-indigo-500/30 p-3.5 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-indigo-300">{msg.payment_card.payment_id}</span>
-                      <span className="text-xs font-semibold text-emerald-400">₹{msg.payment_card.amount_inr?.toLocaleString()}</span>
+                {msg.isError ? (
+                  <div className="bg-rose-950/40 border border-rose-500/30 p-3.5 rounded-xl space-y-2.5">
+                    <div className="text-xs text-rose-300 font-medium flex items-center gap-2">
+                      <RefreshCw className="w-4 h-4 text-rose-400 shrink-0" />
+                      <span>{msg.text}</span>
                     </div>
-                    <div className="text-[11px] text-slate-400 grid grid-cols-2 gap-2">
-                      <div>Method: <strong className="text-slate-200">{msg.payment_card.payment_method}</strong></div>
-                      <div>Recovery Prob: <strong className="text-emerald-400">{msg.payment_card.recovery_probability}%</strong></div>
-                      <div>Category: <strong className="text-slate-200">{msg.payment_card.failure_category}</strong></div>
-                      <div>Band: <strong className="text-indigo-400">{msg.payment_card.probability_band}</strong></div>
-                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={RefreshCw}
+                      onClick={() => handleSendMessage(null, msg.failedQuery)}
+                    >
+                      Retry
+                    </Button>
                   </div>
-                )}
+                ) : (
+                  <>
+                    <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
 
-                {/* Inline Metrics Widget */}
-                {msg.metrics && msg.metrics.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
-                    {msg.metrics.map((m, i) => (
-                      <div key={i} className="bg-slate-900/90 p-2 rounded-xl border border-slate-800 text-center">
-                        <span className="text-[10px] text-slate-400 block">{m.label}</span>
-                        <span className="text-xs font-bold text-emerald-400">{m.value}</span>
+                    {/* Payment Card Preview if available */}
+                    {msg.payment_card && (
+                      <div className="bg-slate-900/90 border border-indigo-500/30 p-3.5 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-300">{msg.payment_card.payment_id}</span>
+                          <span className="text-xs font-semibold text-emerald-400">₹{msg.payment_card.amount_inr?.toLocaleString()}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 grid grid-cols-2 gap-2">
+                          <div>Method: <strong className="text-slate-200">{msg.payment_card.payment_method}</strong></div>
+                          <div>Recovery Prob: <strong className="text-emerald-400">{msg.payment_card.recovery_probability}%</strong></div>
+                          <div>Category: <strong className="text-slate-200">{msg.payment_card.failure_category}</strong></div>
+                          <div>Band: <strong className="text-indigo-400">{msg.payment_card.probability_band}</strong></div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    )}
 
-                {/* Recommendation Box */}
-                {msg.recommendation && (
-                  <div className="bg-indigo-950/50 border border-indigo-500/30 p-3 rounded-xl space-y-1">
-                    <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-indigo-400" /> AI Recommendation
-                    </div>
-                    <div className="text-xs text-slate-200">{msg.recommendation}</div>
-                  </div>
-                )}
+                    {/* Inline Metrics Widget */}
+                    {msg.metrics && msg.metrics.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800">
+                        {msg.metrics.map((m, i) => (
+                          <div key={i} className="bg-slate-900/90 p-2 rounded-xl border border-slate-800 text-center">
+                            <span className="text-[10px] text-slate-400 block">{m.label}</span>
+                            <span className="text-xs font-bold text-emerald-400">{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-                {msg.suggestedAction && (
-                  <Button
-                    variant="accent"
-                    size="sm"
-                    icon={ArrowRight}
-                    iconPosition="right"
-                    onClick={() => handleExecuteAction(msg)}
-                  >
-                    {msg.suggestedAction}
-                  </Button>
+                    {/* Recommendation Box */}
+                    {msg.recommendation && (
+                      <div className="bg-indigo-950/50 border border-indigo-500/30 p-3 rounded-xl space-y-1">
+                        <div className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-indigo-400" /> AI Recommendation
+                        </div>
+                        <div className="text-xs text-slate-200">{msg.recommendation}</div>
+                      </div>
+                    )}
+
+                    {msg.suggestedAction && (
+                      <Button
+                        variant="accent"
+                        size="sm"
+                        icon={ArrowRight}
+                        iconPosition="right"
+                        onClick={() => handleExecuteAction(msg)}
+                      >
+                        {msg.suggestedAction}
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
 

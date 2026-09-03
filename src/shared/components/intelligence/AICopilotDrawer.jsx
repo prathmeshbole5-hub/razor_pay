@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Send, Sparkles, X, ChevronRight, CheckCircle2, MessageSquare, Zap } from 'lucide-react';
+import { Bot, Send, Sparkles, X, ChevronRight, CheckCircle2, MessageSquare, Zap, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fetchCopilotQuery, fetchCopilotPrompts } from '../../../api/copilotApi';
 import { apiRequest } from '../../../api/client';
@@ -55,18 +55,24 @@ export default function AICopilotDrawer({ currentPortal = 'merchant' }) {
     }
   }, [messages, isOpen, loading]);
 
-  const handleSendMessage = async (textToSend) => {
-    const query = textToSend || inputQuery;
+  const handleSendMessage = async (textToSend, retryQuery = null) => {
+    const query = retryQuery || textToSend || inputQuery;
     if (!query.trim()) return;
 
-    const userMsg = { id: `u_${Date.now()}`, sender: 'user', text: query };
-    setMessages((prev) => [...prev, userMsg]);
-    setInputQuery('');
+    if (!retryQuery) {
+      const userMsg = { id: `u_${Date.now()}`, sender: 'user', text: query };
+      setMessages((prev) => [...prev, userMsg]);
+      setInputQuery('');
+    }
     setLoading(true);
 
+    const history = messages
+      .filter((m) => !m.isError)
+      .map((m) => ({ sender: m.sender, text: m.text }));
+
     try {
-      const res = await fetchCopilotQuery(query, 'm_1004', currentPortal);
-      if (res && res.text) {
+      const res = await fetchCopilotQuery(query, 'm_1004', currentPortal, history);
+      if (res && !res.error && res.text) {
         setMessages((prev) => [
           ...prev,
           {
@@ -82,25 +88,34 @@ export default function AICopilotDrawer({ currentPortal = 'merchant' }) {
           }
         ]);
       } else {
+        const errorMsg = res?.message || 'AI Copilot is temporarily unavailable. Please retry.';
         setMessages((prev) => [
           ...prev,
           {
-            id: `ai_${Date.now()}`,
+            id: `ai_err_${Date.now()}`,
             sender: 'ai',
-            text: `Analyzing system telemetries for query: **${query}**. RecoverAI engine recommends monitoring active failure queues.`,
-            metrics: [
-              { label: 'Pipeline Status', value: 'Active' },
-              { label: 'AI Confidence', value: '88%' }
-            ]
+            isError: true,
+            failedQuery: query,
+            text: errorMsg
           }
         ]);
       }
     } catch (err) {
-      console.warn('[AICopilotDrawer] API call error:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ai_err_${Date.now()}`,
+          sender: 'ai',
+          isError: true,
+          failedQuery: query,
+          text: 'AI Copilot is temporarily unavailable. Please retry.'
+        }
+      ]);
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleExecuteAction = async (msg) => {
     if (!msg.actionType) return;
@@ -223,36 +238,54 @@ export default function AICopilotDrawer({ currentPortal = 'merchant' }) {
                             : 'bg-slate-900 border border-slate-800 text-slate-200 shadow'
                         }`}
                       >
-                        <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
-
-                        {msg.metrics && msg.metrics.length > 0 && (
-                          <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-800">
-                            {msg.metrics.map((m, i) => (
-                              <div key={i} className="bg-slate-950 p-1.5 rounded-lg border border-slate-800 text-center">
-                                <span className="text-[9px] text-slate-400 block">{m.label}</span>
-                                <span className="text-[10px] font-bold text-emerald-400">{m.value}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {msg.recommendation && (
-                          <div className="bg-indigo-950/60 border border-indigo-500/30 p-2 rounded-lg space-y-0.5">
-                            <div className="text-[9px] font-bold text-indigo-300 uppercase flex items-center gap-1">
-                              <Sparkles className="w-2.5 h-2.5 text-indigo-400" /> AI Recommendation
+                        {msg.isError ? (
+                          <div className="bg-rose-950/40 border border-rose-500/30 p-2.5 rounded-lg space-y-2">
+                            <div className="text-[11px] text-rose-300 font-medium flex items-center gap-1.5">
+                              <RefreshCw className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                              <span>{msg.text}</span>
                             </div>
-                            <div className="text-[10px] text-slate-200">{msg.recommendation}</div>
+                            <button
+                              onClick={() => handleSendMessage(null, msg.failedQuery)}
+                              className="w-full text-center text-[10px] font-bold text-rose-300 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 py-1 rounded-lg transition-colors flex items-center justify-center gap-1"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Retry Question</span>
+                            </button>
                           </div>
-                        )}
+                        ) : (
+                          <>
+                            <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
 
-                        {msg.suggestedAction && (
-                          <button
-                            onClick={() => handleExecuteAction(msg)}
-                            className="w-full text-center text-[10px] font-bold text-indigo-300 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 py-1 rounded-lg transition-colors flex items-center justify-center gap-1"
-                          >
-                            <span>{msg.suggestedAction}</span>
-                            <ChevronRight className="w-3 h-3" />
-                          </button>
+                            {msg.metrics && msg.metrics.length > 0 && (
+                              <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-800">
+                                {msg.metrics.map((m, i) => (
+                                  <div key={i} className="bg-slate-950 p-1.5 rounded-lg border border-slate-800 text-center">
+                                    <span className="text-[9px] text-slate-400 block">{m.label}</span>
+                                    <span className="text-[10px] font-bold text-emerald-400">{m.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {msg.recommendation && (
+                              <div className="bg-indigo-950/60 border border-indigo-500/30 p-2 rounded-lg space-y-0.5">
+                                <div className="text-[9px] font-bold text-indigo-300 uppercase flex items-center gap-1">
+                                  <Sparkles className="w-2.5 h-2.5 text-indigo-400" /> AI Recommendation
+                                </div>
+                                <div className="text-[10px] text-slate-200">{msg.recommendation}</div>
+                              </div>
+                            )}
+
+                            {msg.suggestedAction && (
+                              <button
+                                onClick={() => handleExecuteAction(msg)}
+                                className="w-full text-center text-[10px] font-bold text-indigo-300 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 py-1 rounded-lg transition-colors flex items-center justify-center gap-1"
+                              >
+                                <span>{msg.suggestedAction}</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
 
