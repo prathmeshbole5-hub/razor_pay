@@ -81,7 +81,7 @@ export default function AICopilot() {
           }
         ]);
       } else {
-        const errorText = apiRes?.message || 'AI Copilot is temporarily unavailable. Please retry.';
+        const errorText = apiRes?.message || 'Backend is waking up. Please retry in a few seconds.';
         setMessages((prev) => [
           ...prev,
           {
@@ -101,7 +101,7 @@ export default function AICopilot() {
           sender: 'ai',
           isError: true,
           failedQuery: query,
-          text: 'AI Copilot is temporarily unavailable. Please retry.'
+          text: err?.message || 'Backend is waking up. Please retry in a few seconds.'
         }
       ]);
     } finally {

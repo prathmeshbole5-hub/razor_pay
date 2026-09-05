@@ -88,7 +88,7 @@ export default function AICopilotDrawer({ currentPortal = 'merchant' }) {
           }
         ]);
       } else {
-        const errorMsg = res?.message || 'AI Copilot is temporarily unavailable. Please retry.';
+        const errorMsg = res?.message || 'Backend is waking up. Please retry in a few seconds.';
         setMessages((prev) => [
           ...prev,
           {
@@ -108,7 +108,7 @@ export default function AICopilotDrawer({ currentPortal = 'merchant' }) {
           sender: 'ai',
           isError: true,
           failedQuery: query,
-          text: 'AI Copilot is temporarily unavailable. Please retry.'
+          text: err?.message || 'Backend is waking up. Please retry in a few seconds.'
         }
       ]);
     } finally {

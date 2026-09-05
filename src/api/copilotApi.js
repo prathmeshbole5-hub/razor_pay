@@ -1,16 +1,16 @@
-import { API_BASE_URL, apiRequest } from './client';
+import { API_BASE_URL, apiRequest, COPILOT_TIMEOUT_MS } from './client';
 
 export async function fetchCopilotQuery(query, merchantId = 'm_1004', mode = 'merchant', history = null) {
   try {
     return await apiRequest('/api/copilot/query', {
       method: 'POST',
       body: JSON.stringify({ query, merchant_id: merchantId, mode, history })
-    });
+    }, COPILOT_TIMEOUT_MS);
   } catch (error) {
     console.error('[Copilot API] Backend request failed:', error);
     return {
       error: true,
-      message: error?.message || 'AI Copilot service is temporarily unavailable. Please retry.'
+      message: error?.message || 'Backend is waking up. Please retry in a few seconds.'
     };
   }
 }
