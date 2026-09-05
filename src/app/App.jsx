@@ -68,7 +68,7 @@ export default function App() {
       case 'gateway':
         return <GatewayHealth />;
       case 'intelligence':
-        return <FailureIntelligence />;
+        return <FailureIntelligence onNavigate={(tab) => setInternalTab(tab)} />;
       case 'network':
         return <MerchantNetwork />;
       case 'flow':

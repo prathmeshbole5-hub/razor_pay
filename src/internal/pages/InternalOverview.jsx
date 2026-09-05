@@ -114,18 +114,104 @@ export default function InternalOverview({ onNavigate }) {
 
   return (
     <div className="space-y-8 animate-fadeIn font-mono">
-      {/* Top Banner Alert if Critical Outage / Live Incident */}
+      {/* Compact Active Incidents Summary Feed */}
       {incidents.length > 0 && (
-        <div className="space-y-4">
-          {incidents.map((anom) => (
-            <AnomalyAlertBanner
-              key={anom.id || anom.incident_id}
-              anomaly={anom}
-              onMitigate={handleMitigateIncident}
-              onViewAffectedPayments={(inc) => setActiveIncidentForDrawer(inc)}
-            />
-          ))}
-        </div>
+        <Card
+          header={
+            <div className="flex items-center justify-between w-full font-mono">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span className="font-bold text-white text-sm">Active Ecosystem Incidents Summary</span>
+                <Badge variant="danger" size="sm">
+                  {incidents.filter(i => i.status !== 'MITIGATED').length} Active
+                </Badge>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onNavigate('intelligence')}
+                className="text-xs text-cyan-300 border-slate-700 hover:border-cyan-500/50"
+              >
+                Deep Failure Intelligence →
+              </Button>
+            </div>
+          }
+          hover={false}
+        >
+          <div className="space-y-3 font-mono">
+            {incidents.map((inc) => {
+              const isTest = inc.source === 'razorpay_test_webhook';
+              const impactVal = Number(inc.estimatedRevenueImpact || inc.amount_at_risk || 0);
+              const formattedImpact = impactVal >= 100000
+                ? `₹${(impactVal / 100000).toFixed(1)}L`
+                : `₹${impactVal.toLocaleString('en-IN')}`;
+              const isMitigated = inc.status === 'MITIGATED';
+
+              return (
+                <div
+                  key={inc.id || inc.incident_id}
+                  className={`p-4 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all ${
+                    isMitigated
+                      ? 'bg-slate-950/60 border-slate-800'
+                      : inc.severity === 'CRITICAL'
+                        ? 'bg-rose-950/20 border-rose-500/40 hover:border-rose-500/60'
+                        : 'bg-amber-950/20 border-amber-500/30 hover:border-amber-500/50'
+                  }`}
+                >
+                  <div className="space-y-1.5 max-w-2xl">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={inc.severity === 'CRITICAL' ? 'danger' : 'warning'} size="sm">
+                        {inc.severity}
+                      </Badge>
+                      {isTest && (
+                        <Badge variant="brand" size="sm">
+                          RAZORPAY TEST MODE
+                        </Badge>
+                      )}
+                      <span className="text-[11px] text-cyan-300 font-semibold">
+                        {inc.confidenceScore || 95}% Confidence
+                      </span>
+                      {isMitigated && (
+                        <Badge variant="success" size="sm">
+                          MITIGATED
+                        </Badge>
+                      )}
+                    </div>
+                    <h4 className="text-sm font-bold text-white tracking-tight">{inc.title}</h4>
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+                      <span>Gateway: <strong className="text-slate-200">{inc.gateway || 'Razorpay Gateway'}</strong></span>
+                      <span>•</span>
+                      <span>Affected Merchants: <strong className="text-cyan-400">{inc.affectedMerchants || 1}</strong></span>
+                      <span>•</span>
+                      <span>Transactions: <strong className="text-slate-200">{inc.impactedTransactions || 1}</strong></span>
+                      <span>•</span>
+                      <span>Amount at Risk: <strong className="text-rose-400">{formattedImpact}</strong></span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setActiveIncidentForDrawer(inc)}
+                      className="text-xs text-slate-300 border-slate-800 hover:border-cyan-500/40 py-2"
+                    >
+                      View Affected Payments ({inc.impactedTransactions || 1})
+                    </Button>
+                    <Button
+                      variant="accent"
+                      size="sm"
+                      onClick={() => onNavigate('intelligence')}
+                      className="text-xs py-2"
+                    >
+                      Investigate →
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       )}
 
       {/* Real-time TPS Meter */}
